@@ -1,0 +1,24 @@
+{
+  "name": "n2ngo-ws-relay",
+  "version": "1.0.0",
+  "description": "n2n-go WebSocket control plane on Cloudflare Workers + Durable Objects",
+  "main": "src/worker.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+  },
+  "keywords": ["n2n", "vpn", "cloudflare", "worker", "durable-objects"],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "protobufjs": "^8.0.0",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240101.0",
+    "wrangler": "^4.129.0"
+  }
+}

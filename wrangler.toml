@@ -1,0 +1,61 @@
+name = "n2ngo-ws-relay"
+main = "src/worker.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[build]
+command = ""
+
+[durable_objects]
+bindings = [
+  { name = "RELAY_ROOM", class_name = "RelayRoom" }
+]
+
+[vars]
+# WebSocket 路径，客户端连接 wss://domain/n2n?community=xxx
+WS_PATH = "n2n"
+
+# 心跳间隔（秒）
+HEARTBEAT_INTERVAL = "60"
+
+# 限流：每分钟最大请求数
+RATE_LIMIT_PER_MINUTE = "120"
+
+# 缓存保存间隔（秒）
+CACHE_SAVE_INTERVAL = "300"
+
+# 是否禁用中转（仅 P2P 直连模式）
+DISABLE_RELAY = "0"
+
+# 是否允许 P2P 直连（下发 p2pEndpoint）
+ALLOW_P2P = "1"
+
+# 白名单 Token（逗号分隔），为空则不限制
+WHITE_TOKEN = ""
+
+# 日志密码（设置后开启 /log 端点）
+LOG_PASSWORD = ""
+
+# 本地部署模式（不持久化到存储）
+LOCAL_DEPLOY = "false"
+
+# 地理位置提示（可选：指定 DO 运行位置）
+# LOCATION_HINT = "enam"
+
+# 网关名称（用于 /room 页面显示）
+GATEWAY_NAME = "n2n-gateway"
+
+[[migrations]]
+# Durable Objects 的数据库迁移版本
+tag = "v1"
+new_sqlite_classes = ["RelayRoom"]
+
+#[[kv_namespaces]]
+#binding = "SN_KEYS"
+#id = "b7faa3a7d1624ebcbd02c17eafb96195"
+#preview_id = "your-preview-kv-namespace-id"
+
+#[[d1_databases]]
+#binding = "AUDIT_DB"
+#database_name = "n2n-audit"
+#database_id = "your-d1-database-id"

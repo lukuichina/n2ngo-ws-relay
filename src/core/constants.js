@@ -20,6 +20,7 @@ export const PacketType = {
   PeerListRequest: 6,   // TypePeerListRequest
   PeerInfo: 7,          // TypePeerInfo
   Ping: 8,              // TypePing
+  Pong: 8,              // TypePong (same as Ping, distinguished by IsPong flag in PeerToPing)
   P2PStateInfo: 9,      // TypeP2PStateInfo
   P2PFullState: 10,     // TypeP2PFullState
   LeasesInfos: 11,      // TypeLeasesInfos

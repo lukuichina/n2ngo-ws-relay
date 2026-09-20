@@ -203,7 +203,7 @@ export class PacketHandler {
 
       case PacketType.Ping:
       case PacketType.Pong:
-        await this.handlePing(ws, commState, header);
+        await this.handlePing(ws, commState, header, payload);
         break;
 
       case PacketType.Heartbeat:
@@ -364,20 +364,20 @@ export class PacketHandler {
   /**
    * 处理心跳
    */
-  async handlePing(ws, commState, header) {
+  async handlePing(ws, commState, header, payload) {
     // 更新 Peer 最后见到时间
     const connInfo = this.relayRoom.connections.get(ws);
     if (connInfo) {
       commState.updatePeer(connInfo.macAddr, { lastSeen: Math.floor(Date.now() / 1000) });
     }
 
-    // 回复 Pong
+    // 回复 Pong，透传原始 Ping 的 payload（含 CheckId），而非发空包
     await this.sendPacket(ws, {
       packetType: PacketType.Pong,
       communityId: header.communityId,
       srcMAC: header.dstMAC,
       dstMAC: header.srcMAC,
-      payload: new Uint8Array(0),
+      payload: payload || new Uint8Array(0),
     });
   }
 

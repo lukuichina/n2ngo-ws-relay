@@ -12,13 +12,10 @@
   "keywords": ["n2n", "vpn", "cloudflare", "worker", "durable-objects"],
   "license": "MIT",
   "dependencies": {
-    "dotenv": "^16.4.5",
-    "protobufjs": "^8.0.0",
-    "uuid": "^13.0.0",
-    "ws": "^8.18.3"
+    "protobufjs": "^8.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240101.0",
-    "wrangler": "^4.129.0"
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "wrangler": "^4.135.0"
   }
 }

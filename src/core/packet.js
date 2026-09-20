@@ -96,6 +96,28 @@ export function unpackProtoVDatagram(buf) {
   return { header, payload };
 }
 
+/**
+ * 标记数据包为来自 Supernode（对齐 Go 侧 protocol.FlagPacketFromSupernode）
+ *
+ * 解包 ProtoV 头部，设置 FlagFromSuperNode 标志位，重新打包。
+ * 对应 Go 侧：
+ *
+ * func FlagPacketFromSupernode(packet []byte) ([]byte, error) {
+ *     header, payload, err := UnpackProtoVDatagram(packet)
+ *     if err != nil { return nil, err }
+ *     header.SetFromSupernode(true)
+ *     return PackProtoVDatagram(header, payload), nil
+ * }
+ *
+ * @param {Uint8Array} packet - 原始 ProtoV 数据报
+ * @returns {Uint8Array} 标记后的数据报
+ */
+export function flagPacketFromSupernode(packet) {
+  const { header, payload } = unpackProtoVDatagram(packet);
+  header.flags |= Flags.FromSupernode;
+  return packProtoVDatagram(header, payload);
+}
+
 // ============================================================
 // Protobuf 消息体编解码 — 彻底抛弃 JSON/GOB
 // ============================================================
@@ -349,6 +371,168 @@ export function decodeTURNCredentials(buf) {
     password: data.password || "",
     ttl: data.ttl || 86400,
     uris: data.uris || [],
+  };
+}
+
+// ---------- P2P State (PeerP2PInfos / P2PFullState / PeerCachedInfo) ----------
+
+/**
+ * 编码 PeerP2PInfos (type 9 payload)
+ * 对应 Go 侧 p2p.PeerP2PInfos
+ */
+export function encodePeerP2PInfos(msg) {
+  const from = msg.from ? {
+    virtualIp: msg.from.virtualIp || msg.from.virtual_ip || "",
+    macAddr: macStrToBytes(msg.from.macAddr || msg.from.mac_addr),
+    pubSocket: toPubSocketStr(msg.from.pubSocket || msg.from.pub_socket),
+    p2pEndpoint: msg.from.p2pEndpoint || msg.from.p2p_endpoint || "",
+    natType: msg.from.natType || msg.from.nat_type || "unknown",
+    lastSeen: msg.from.lastSeen || msg.from.last_seen || Math.floor(Date.now() / 1000),
+    p2pCapabilities: msg.from.capabilities || msg.from.p2p_capabilities || msg.from.p2pCapabilities || [],
+  } : null;
+
+  const to = (msg.to || []).map(p => ({
+    virtualIp: typeof p.virtual_ip === 'number'
+      ? numberToIp(p.virtual_ip)
+      : (typeof p.virtualIP === 'number' ? numberToIp(p.virtualIP) : (p.virtual_ip || p.virtualIP)),
+    macAddr: macStrToBytes(p.mac_addr || p.macAddr),
+    pubSocket: toPubSocketStr(p.pub_socket || p.pubSocket),
+    p2pEndpoint: p.p2p_endpoint || p.p2pEndpoint || "",
+    natType: p.nat_type || p.natType || "unknown",
+    lastSeen: p.last_seen || p.lastSeen || Math.floor(Date.now() / 1000),
+    p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
+  }));
+
+  return encode("PeerP2PInfos", { from, to });
+}
+
+export function decodePeerP2PInfos(buf) {
+  const data = decode("PeerP2PInfos", buf);
+  const from = data.from ? {
+    virtualIp: data.from.virtualIp || data.from.virtual_ip || "",
+    macAddr: macBytesToStr(data.from.macAddr),
+    pubSocket: toPubSocketStr(data.from.pubSocket || data.from.pub_socket),
+    p2pEndpoint: data.from.p2pEndpoint || data.from.p2p_endpoint || "",
+    natType: data.from.natType || data.from.nat_type || "unknown",
+    lastSeen: data.from.lastSeen || data.from.last_seen || 0,
+    p2pCapabilities: data.from.capabilities || data.from.p2p_capabilities || data.from.p2pCapabilities || [],
+  } : null;
+
+  const to = (data.to || []).map(p => ({
+    virtualIp: p.virtualIp || p.virtual_ip || "",
+    macAddr: macBytesToStr(p.macAddr),
+    pubSocket: toPubSocketStr(p.pubSocket || p.pub_socket),
+    p2pEndpoint: p.p2pEndpoint || p.p2p_endpoint || "",
+    natType: p.natType || p.nat_type || "unknown",
+    lastSeen: p.lastSeen || p.last_seen || 0,
+    p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
+  }));
+
+  return { from, to };
+}
+
+/**
+ * 编码 P2PFullState (type 10 payload)
+ * 对应 Go 侧 p2p.P2PFullState
+ */
+export function encodeP2PFullState(msg) {
+  const reachables = {};
+  if (msg.reachables) {
+    for (const [mac, infos] of Object.entries(msg.reachables)) {
+      reachables[mac] = {
+        from: infos.from ? {
+          virtualIp: infos.from.virtualIp || infos.from.virtual_ip || "",
+          macAddr: macStrToBytes(infos.from.macAddr || infos.from.mac_addr),
+          pubSocket: toPubSocketStr(infos.from.pubSocket || infos.from.pub_socket),
+          p2pEndpoint: infos.from.p2pEndpoint || infos.from.p2p_endpoint || "",
+          natType: infos.from.natType || infos.from.nat_type || "unknown",
+          lastSeen: infos.from.lastSeen || infos.from.last_seen || Math.floor(Date.now() / 1000),
+          p2pCapabilities: infos.from.capabilities || infos.from.p2p_capabilities || infos.from.p2pCapabilities || [],
+        } : null,
+        to: (infos.to || []).map(p => ({
+          virtualIp: typeof p.virtual_ip === 'number'
+            ? numberToIp(p.virtual_ip)
+            : (typeof p.virtualIP === 'number' ? numberToIp(p.virtualIP) : (p.virtual_ip || p.virtualIP)),
+          macAddr: macStrToBytes(p.mac_addr || p.macAddr),
+          pubSocket: toPubSocketStr(p.pub_socket || p.pubSocket),
+          p2pEndpoint: p.p2p_endpoint || p.p2pEndpoint || "",
+          natType: p.nat_type || p.natType || "unknown",
+          lastSeen: p.last_seen || p.lastSeen || Math.floor(Date.now() / 1000),
+          p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
+        })),
+      };
+    }
+  }
+
+  const unreachables = {};
+  if (msg.unreachables) {
+    for (const [mac, info] of Object.entries(msg.unreachables)) {
+      unreachables[mac] = {
+        desc: info.desc || "",
+        macAddr: info.macAddr || info.mac_addr || "",
+        virtualIp: info.virtualIp || info.virtual_ip || "",
+        community: info.community || "",
+        lastUpdateNs: info.lastUpdateNs || info.last_update_ns || 0,
+      };
+    }
+  }
+
+  return encode("P2PFullState", {
+    communityName: msg.communityName || msg.community_name || "",
+    isRequest: msg.isRequest != null ? msg.isRequest : (msg.is_request != null ? msg.is_request : false),
+    reachables,
+    unreachables,
+  });
+}
+
+export function decodeP2PFullState(buf) {
+  const data = decode("P2PFullState", buf);
+
+  const reachables = {};
+  if (data.reachables) {
+    for (const [mac, infos] of Object.entries(data.reachables)) {
+      const from = infos.from ? {
+        virtualIp: infos.from.virtualIp || infos.from.virtual_ip || "",
+        macAddr: macBytesToStr(infos.from.macAddr),
+        pubSocket: toPubSocketStr(infos.from.pubSocket || infos.from.pub_socket),
+        p2pEndpoint: infos.from.p2pEndpoint || infos.from.p2p_endpoint || "",
+        natType: infos.from.natType || infos.from.nat_type || "unknown",
+        lastSeen: infos.from.lastSeen || infos.from.last_seen || 0,
+        p2pCapabilities: infos.from.capabilities || infos.from.p2p_capabilities || infos.from.p2pCapabilities || [],
+      } : null;
+
+      const to = (infos.to || []).map(p => ({
+        virtualIp: p.virtualIp || p.virtual_ip || "",
+        macAddr: macBytesToStr(p.macAddr),
+        pubSocket: toPubSocketStr(p.pubSocket || p.pub_socket),
+        p2pEndpoint: p.p2pEndpoint || p.p2p_endpoint || "",
+        natType: p.natType || p.nat_type || "unknown",
+        lastSeen: p.lastSeen || p.last_seen || 0,
+        p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
+      }));
+
+      reachables[mac] = { from, to };
+    }
+  }
+
+  const unreachables = {};
+  if (data.unreachables) {
+    for (const [mac, info] of Object.entries(data.unreachables)) {
+      unreachables[mac] = {
+        desc: info.desc || "",
+        macAddr: info.macAddr || info.mac_addr || "",
+        virtualIp: info.virtualIp || info.virtual_ip || "",
+        community: info.community || "",
+        lastUpdateNs: info.lastUpdateNs || info.last_update_ns || 0,
+      };
+    }
+  }
+
+  return {
+    communityName: data.communityName || data.community_name || "",
+    isRequest: data.isRequest != null ? data.isRequest : (data.is_request != null ? data.is_request : false),
+    reachables,
+    unreachables,
   };
 }
 

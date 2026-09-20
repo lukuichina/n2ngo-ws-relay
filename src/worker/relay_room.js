@@ -25,6 +25,9 @@ export class RelayRoom {
     // 连接管理: WebSocket -> 连接信息
     this.connections = new Map();
 
+    // 虚拟网段配置（从环境变量读取，支持自定义网段 CIDR）
+    this.networkConfig = env.VIRTUAL_NETWORK ? { cidr: env.VIRTUAL_NETWORK } : {};
+
     // 社区管理器
     this.communityManager = new CommunityManager(this);
 
@@ -351,6 +354,7 @@ export class RelayRoom {
       rateLimit: this.rateLimitConfig,
       env: {
         WS_PATH: this.env.WS_PATH,
+        GATEWAY_NAME: this.env.GATEWAY_NAME || "n2n-gateway",
         ALLOW_P2P: this.env.ALLOW_P2P,
         DISABLE_RELAY: this.env.DISABLE_RELAY,
       },
@@ -420,7 +424,7 @@ export class RelayRoom {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>n2n-go Control Plane - Login</title>
+  <title>${this.env.GATEWAY_NAME || "n2n-go Control Plane"} - Login</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
     .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); width: 100%; max-width: 400px; }
@@ -435,7 +439,7 @@ export class RelayRoom {
 </head>
 <body>
   <div class="card">
-    <h1>n2n-go Control Plane</h1>
+    <h1>${this.env.GATEWAY_NAME || "n2n-go Control Plane"}</h1>
     ${error ? `<div class="error">${error}</div>` : ''}
     <form method="GET" action="/room">
       <div class="form-group">
@@ -492,7 +496,7 @@ export class RelayRoom {
 </head>
 <body>
   <div class="container">
-    <h1>Community: ${token}</h1>
+    <h1>${this.env.GATEWAY_NAME || "n2n-gateway"} - Community: ${token}</h1>
     <div class="stats">
       <div class="stat-card"><div class="stat-value">${onlinePeers.length}</div><div class="stat-label">Online</div></div>
       <div class="stat-card"><div class="stat-value">${offlinePeers.length}</div><div class="stat-label">Offline</div></div>

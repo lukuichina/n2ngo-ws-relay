@@ -1,26 +1,68 @@
 /**
  * IP Address Management (IPAM) for n2n-go virtual IPs
  * 对应 n2n-go 的 Lease 管理和虚拟 IP 分配逻辑
- * 网段：100.64.0.0/10 (CGNAT) -> 100.64.0.1 - 100.127.255.254
+ * 默认网段：100.64.0.0/16 (CGNAT) -> 100.64.0.1 - 100.64.255.254
  */
 
 import {
-  VIRTUAL_NETWORK_BASE,
-  VIRTUAL_NETWORK_MASK,
-  VIRTUAL_NETWORK_START,
-  VIRTUAL_NETWORK_END,
   numberToIp,
   ipToNumber,
 } from "./constants.js";
 
+/**
+ * 解析 CIDR 字符串为网段参数
+ * @param {string} cidr - 如 "100.64.0.0/16"
+ * @returns {{base: number, mask: number, start: number, end: number}} 或 null
+ */
+export function parseCIDR(cidr) {
+  const parts = cidr.split('/');
+  if (parts.length !== 2) return null;
+  const base = ipToNumber(parts[0]);
+  const prefixLen = parseInt(parts[1], 10);
+  if (isNaN(base) || isNaN(prefixLen) || prefixLen < 0 || prefixLen > 32) return null;
+
+  // 计算掩码：高 prefixLen 位为 1
+  const mask = prefixLen === 0 ? 0xFFFFFFFF : (~0 << (32 - prefixLen)) >>> 0;
+  // 网络地址 = base & mask
+  const networkBase = (base & mask) >>> 0;
+  // 广播地址 = networkBase | ~mask
+  const broadcast = (networkBase | (~mask & 0xFFFFFFFF)) >>> 0;
+  // 可用起始 = networkBase + 1（跳过网络地址）
+  const start = networkBase + 1;
+  // 可用结束 = broadcast - 1（跳过广播地址）
+  const end = broadcast - 1;
+
+  return { base: networkBase, mask, start, end };
+}
+
 export class IPAM {
-  constructor(storage, community) {
+  constructor(storage, community, networkConfig) {
     this.storage = storage;
     this.community = community;
     this.key = `ipam:${community}`;
     this.allocations = new Map(); // macAddr -> ipNumber
     this.reverse = new Map();     // ipNumber -> macAddr
-    this.nextCandidate = VIRTUAL_NETWORK_START;
+
+    // 网段配置：优先使用传入的 networkConfig (CIDR 字符串)，否则使用默认常量
+    const cfg = networkConfig || {};
+    if (cfg.cidr) {
+      const parsed = parseCIDR(cfg.cidr);
+      if (parsed) {
+        this.networkBase = parsed.base;
+        this.networkMask = parsed.mask;
+        this.networkStart = parsed.start;
+        this.networkEnd = parsed.end;
+      } else {
+        throw new Error(`Invalid CIDR: ${cfg.cidr}`);
+      }
+    } else {
+      this.networkBase = cfg.networkBase != null ? cfg.networkBase : VIRTUAL_NETWORK_BASE;
+      this.networkMask = cfg.networkMask != null ? cfg.networkMask : VIRTUAL_NETWORK_MASK;
+      this.networkStart = cfg.networkStart != null ? cfg.networkStart : VIRTUAL_NETWORK_START;
+      this.networkEnd = cfg.networkEnd != null ? cfg.networkEnd : VIRTUAL_NETWORK_END;
+    }
+
+    this.nextCandidate = this.networkStart;
   }
 
   /**
@@ -32,10 +74,10 @@ export class IPAM {
       if (data) {
         this.allocations = new Map(Object.entries(data.allocations || {}).map(([k, v]) => [k, Number(v)]));
         this.reverse = new Map(Object.entries(data.reverse || {}).map(([k, v]) => [Number(k), v]));
-        this.nextCandidate = data.nextCandidate || VIRTUAL_NETWORK_START;
+        this.nextCandidate = data.nextCandidate || this.networkStart;
         // 校验 nextCandidate 有效性
-        if (this.nextCandidate < VIRTUAL_NETWORK_START || this.nextCandidate > VIRTUAL_NETWORK_END) {
-          this.nextCandidate = VIRTUAL_NETWORK_START;
+        if (this.nextCandidate < this.networkStart || this.nextCandidate > this.networkEnd) {
+          this.nextCandidate = this.networkStart;
         }
       }
     } catch (e) {
@@ -76,8 +118,8 @@ export class IPAM {
     let attempts = 0;
     const maxAttempts = 10000; // 防止死循环
     while (attempts < maxAttempts) {
-      if (this.nextCandidate > VIRTUAL_NETWORK_END) {
-        this.nextCandidate = VIRTUAL_NETWORK_START; // 回绕
+      if (this.nextCandidate > this.networkEnd) {
+        this.nextCandidate = this.networkStart; // 回绕
       }
       if (!this.reverse.has(this.nextCandidate)) {
         break;
@@ -153,9 +195,9 @@ export class IPAM {
     return {
       community: this.community,
       allocated: this.allocations.size,
-      poolSize: VIRTUAL_NETWORK_END - VIRTUAL_NETWORK_START + 1,
+      poolSize: this.networkEnd - this.networkStart + 1,
       nextCandidate: this.nextCandidate,
-      usagePercent: ((this.allocations.size / (VIRTUAL_NETWORK_END - VIRTUAL_NETWORK_START + 1)) * 100).toFixed(2),
+      usagePercent: ((this.allocations.size / (this.networkEnd - this.networkStart + 1)) * 100).toFixed(2),
     };
   }
 

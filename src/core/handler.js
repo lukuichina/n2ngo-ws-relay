@@ -11,8 +11,10 @@
 import {
   VERSION,
   HEADER_SIZE,
+  VFuze_HEADER_SIZE,
   PacketType,
   PeerInfoEvent,
+  Flags,
   hashCommunity,
   parseMAC,
   formatMAC,
@@ -30,6 +32,10 @@ import {
   encodeICECandidate,
   decodeICECandidate,
   encodeTURNCredentials,
+  decodePeerP2PInfos,
+  decodeP2PFullState,
+  encodeP2PFullState,
+  flagPacketFromSupernode,
   parseVFuzeHeader,
 } from "./packet.js";
 import { encode } from "./protos.js";
@@ -218,6 +224,11 @@ export class PacketHandler {
       case PacketType.P2PStateInfo:
         // type 9 - Edge 上报 P2P 状态信息 (PeerP2PInfos)
         await this.handleP2PStateInfo(ws, commState, payload);
+        break;
+
+      case PacketType.P2PFullState:
+        // type 10 - Edge 请求/接收 P2P 全量状态
+        await this.handleP2PFullState(ws, commState, payload);
         break;
 
       case PacketType.ICECandidate:
@@ -459,13 +470,69 @@ export class PacketHandler {
       return;
     }
 
-    // 尝试从 payload 中提取 from MAC（protobuf field 1, PeerInfo, bytes mac_addr=2）
-    // 简化处理：仅更新 lastSeen，不完整解码 P2P 拓扑
+    // 对齐 Go 侧 supernode.handleP2PStateInfoMessage：
+    //   解码 PeerP2PInfos，存储到社区 P2P 状态表 (cm.SetP2PInfosFor)
+    let p2pInfos;
+    try {
+      p2pInfos = decodePeerP2PInfos(payload);
+    } catch (e) {
+      console.error("[PacketHandler] P2PStateInfo decode failed:", e);
+      return;
+    }
+
+    commState.setP2PInfosFor(connInfo.macAddr, p2pInfos);
     commState.updatePeer(connInfo.macAddr, {
       lastSeen: Math.floor(Date.now() / 1000),
     });
 
-    console.log(`[PacketHandler] P2PStateInfo: from=${connInfo.macAddr} payloadLen=${payload ? payload.length : 0}`);
+    console.log(`[PacketHandler] P2PStateInfo: from=${connInfo.macAddr} to=${p2pInfos.to ? p2pInfos.to.length : 0} payloadLen=${payload ? payload.length : 0}`);
+  }
+
+  /**
+   * 处理 P2PFullState (type 10) - 对齐 Go 侧 supernode.handleP2PFullStateMessage
+   *
+   * Edge 发送 P2PFullState 请求 (IsRequest=true) 时，回传社区内所有 peer 的 P2P 地址信息。
+   * 非请求消息 (IsRequest=false) 不应由 supernode 处理。
+   */
+  async handleP2PFullState(ws, commState, payload) {
+    const connInfo = this.relayRoom.connections.get(ws);
+    if (!connInfo) {
+      console.warn("[PacketHandler] P2PFullState: no connInfo for ws");
+      return;
+    }
+
+    let fsMsg;
+    try {
+      fsMsg = decodeP2PFullState(payload);
+    } catch (e) {
+      console.error("[PacketHandler] P2PFullState decode failed:", e);
+      return;
+    }
+
+    // 对齐 Go 侧：仅处理 IsRequest=true 的请求
+    if (!fsMsg.isRequest) {
+      console.warn(`[PacketHandler] P2PFullState: non-request from ${connInfo.macAddr}, ignored`);
+      return;
+    }
+
+    // 对齐 Go 侧 cm.GetCommunityPeerP2PInfosDatas：
+    //   构建 Reachables (在线 peer P2P 状态) + Unreachables (离线 peer 缓存)
+    const fullState = commState.getP2PFullState(connInfo.macAddr);
+    if (!fullState) {
+      console.warn(`[PacketHandler] P2PFullState: unknown requester ${connInfo.macAddr}`);
+      return;
+    }
+
+    const respPayload = encodeP2PFullState(fullState);
+    await this.sendPacket(ws, {
+      packetType: PacketType.P2PFullState,
+      communityId: hashCommunity(commState.community),
+      srcMAC: parseMAC("00:00:00:00:00:00"), // SN MAC
+      dstMAC: new Uint8Array(6),
+      payload: respPayload,
+    });
+
+    console.log(`[PacketHandler] P2PFullState: responded to ${connInfo.macAddr} reachables=${Object.keys(fullState.reachables).length} unreachables=${Object.keys(fullState.unreachables).length}`);
   }
 
   /**
@@ -589,7 +656,15 @@ export class PacketHandler {
   }
 
   /**
-   * 处理 VFuze 打洞包 (透传)
+   * 处理 VFuze 打洞包
+   *
+   * 对齐 Go 侧 supernode.handleVFuze 行为：
+   * 1. 校验社区匹配（srcedge.Community == dstedge.Community）
+   * 2. 源/目标 edge 都必须存在，否则丢弃（不回退广播）
+   * 3. 单播转发 VFuze 包给目标 peer（对齐 supernode.forwardPacket）
+   *
+   * 注意：Go 侧 handleVFuze 没有 ForwardWithFallBack 回退逻辑。
+   * VFuze 包是打洞包，目标不可达时直接丢弃，不走广播。
    */
   async handleVFuzePacket(ws, buf) {
     try {
@@ -597,29 +672,50 @@ export class PacketHandler {
       const dstMAC = formatMAC(header.dstMAC);
 
       const connInfo = this.relayRoom.connections.get(ws);
-      const srcMAC = connInfo?.macAddr ? formatMAC(connInfo.macAddr) : 'unknown';
-      const community = connInfo?.community;
-      if (!community) {
+      if (!connInfo) {
+        console.log(`[PacketHandler] VFuze: no connInfo for WS, dropping`);
+        return;
+      }
+
+      const srcMAC = connInfo.macAddr;
+      const srcCommunity = connInfo.community;
+      if (!srcCommunity) {
         console.log(`[PacketHandler] VFuze: no community for WS, dropping`);
         return;
       }
 
-      const commState = await this.communityManager.getCommunity(community);
+      const commState = await this.communityManager.getCommunity(srcCommunity);
       if (!commState) {
-        console.log(`[PacketHandler] VFuze: community ${community} not found, dropping`);
+        console.log(`[PacketHandler] VFuze: community ${srcCommunity} not found, dropping`);
         return;
       }
 
-      // 查找目标 Peer
-      const targetPeer = commState.getPeer(dstMAC);
-      console.log(`[PacketHandler] VFuze: srcMAC=${srcMAC} dstMAC=${dstMAC} bufLen=${buf.length} targetPeer=${targetPeer ? 'found(online=' + targetPeer.online + ')' : 'NOT FOUND'}`);
+      // 对齐 Go 侧 supernode.handleVFuze：
+      //   dstedge, dstok := s.edgesByMAC[dst.String()]
+      //   srcedge, srcok := s.edgesBySocket[addr.String()]
+      //   if !dstok || !srcok { return }  // 丢弃，不回退
+      const dstPeer = commState.getPeer(dstMAC);
+      const srcPeer = commState.getPeer(srcMAC);
 
-      if (targetPeer && targetPeer.online && targetPeer.ws) {
-        await targetPeer.ws.send(buf);
+      if (!dstPeer || !srcPeer) {
+        console.log(`[PacketHandler] VFuze: dropping - dstPeer=${!!dstPeer} srcPeer=${!!srcPeer} ` +
+          `srcMAC=${srcMAC} dstMAC=${dstMAC}`);
+        return;
+      }
+
+      // 对齐 Go 侧社区匹配校验：
+      //   if dstedge.Community != srcedge.Community { return }
+      if (dstPeer.community !== srcPeer.community) {
+        console.log(`[PacketHandler] VFuze: community mismatch - src=${srcPeer.community} dst=${dstPeer.community}, dropping`);
+        return;
+      }
+
+      // 对齐 Go 侧：仅单播转发，无 ForwardWithFallBack 回退
+      if (dstPeer.online && dstPeer.ws) {
+        await dstPeer.ws.send(buf);
         console.log(`[PacketHandler] VFuze: forwarded to ${dstMAC}`);
       } else {
-        const allPeers = commState.getOnlinePeers();
-        console.log(`[PacketHandler] VFuze: target ${dstMAC} not available. Online peers: ${allPeers.map(p => p.macAddr).join(', ')}`);
+        console.log(`[PacketHandler] VFuze: target ${dstMAC} not online, dropping`);
       }
     } catch (e) {
       console.error("[PacketHandler] VFuze packet error:", e);
@@ -631,14 +727,15 @@ export class PacketHandler {
   /**
    * 发送标准 ProtoV 包
    */
-  async sendPacket(ws, { packetType, communityId, srcMAC, dstMAC, payload }) {
+  async sendPacket(ws, { packetType, communityId, srcMAC, dstMAC, payload, fromSupernode = true }) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
 
+    // 对齐 Go 侧 SNHeader: Flags = protocol.FlagFromSuperNode
     const header = {
       version: VERSION,
       ttl: 64,
       packetType,
-      flags: 0,
+      flags: fromSupernode ? Flags.FromSupernode : 0,
       sequence: Math.floor(Math.random() * 65536),
       communityId,
       srcMAC,
@@ -741,13 +838,27 @@ export class PacketHandler {
    * @param {string} params.srcMAC - 源 MAC 地址
    */
   async ForwardWithFallBack({ ws, commState, dstMAC, rawBuf, srcMAC }) {
+    // 对齐 Go 侧 supernode.forwardPacket：
+    //   if packet[0] == protocol.VersionV {
+    //       packet, err = protocol.FlagPacketFromSupernode(packet)
+    //   }
+    // 无论单播还是广播，Supernode 转发的数据包都标记 FlagFromSuperNode
+    let snBuf = rawBuf;
+    if (rawBuf && rawBuf.length > 0 && rawBuf[0] === VERSION) {
+      try {
+        snBuf = flagPacketFromSupernode(rawBuf);
+      } catch (e) {
+        console.error("[PacketHandler] ForwardWithFallBack: flagPacketFromSupernode failed:", e.message);
+      }
+    }
+
     const targetPeer = commState.getPeer(dstMAC);
 
     // 尝试单播转发
     if (targetPeer && targetPeer.online && targetPeer.ws) {
       try {
-        await targetPeer.ws.send(rawBuf);
-        console.log(`[PacketHandler] ForwardWithFallBack: unicast forward to ${dstMAC} OK`);
+        await targetPeer.ws.send(snBuf);
+        console.log(`[PacketHandler] ForwardWithFallBack: unicast forward to ${dstMAC} OK (FlagFromSuperNode set)`);
         return;
       } catch (e) {
         console.error(`[PacketHandler] ForwardWithFallBack: unicast forward ERROR to ${dstMAC}: ${e.message}`);
@@ -764,8 +875,8 @@ export class PacketHandler {
     for (const p of onlinePeers) {
       if (p.ws && p.ws !== ws) {
         try {
-          await p.ws.send(rawBuf);
-          console.log(`[PacketHandler] ForwardWithFallBack:   -> broadcast forwarded to ${p.macAddr}`);
+          await p.ws.send(snBuf);
+          console.log(`[PacketHandler] ForwardWithFallBack:   -> broadcast forwarded to ${p.macAddr} (FlagFromSuperNode set)`);
         } catch (e) {
           console.error(`[PacketHandler] ForwardWithFallBack:   -> ERROR broadcasting to ${p.macAddr}: ${e.message}`);
         }

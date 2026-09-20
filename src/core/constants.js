@@ -44,7 +44,7 @@ export const PeerInfoEvent = {
 export const Flags = {
   None: 0,
   Compressed: 1 << 0,    // 数据压缩
-  Encrypted: 1 << 1,     // 数据加密
+  FromSupernode: 1 << 1, // 对齐 Go: FlagFromSuperNode = 0x02
   Broadcast: 1 << 2,     // 广播包
   VFuze: 1 << 3,         // VFuze 包
   P2P: 1 << 4,           // P2P 直连包
@@ -90,12 +90,13 @@ export function numberToIp(num) {
   return `${(num >>> 24) & 255}.${(num >>> 16) & 255}.${(num >>> 8) & 255}.${num & 255}`;
 }
 
-// 虚拟 IP 网段：100.64.0.0/10 (CGNAT)
-// 可用范围：100.64.0.1 - 100.127.255.254
+// 虚拟 IP 网段：100.64.0.0/16 (CGNAT)
+// 可用范围：100.64.0.1 - 100.64.255.254
+// 注意：可通过 VIRTUAL_NETWORK 环境变量自定义网段（CIDR 格式）
 export const VIRTUAL_NETWORK_BASE = 0x64400000; // 100.64.0.0
-export const VIRTUAL_NETWORK_MASK = 0xFFC00000; // /10
+export const VIRTUAL_NETWORK_MASK = 0xFFFF0000; // /16
 export const VIRTUAL_NETWORK_START = 0x64400001; // 100.64.0.1
-export const VIRTUAL_NETWORK_END = 0x647FFFFE;   // 100.127.255.254
+export const VIRTUAL_NETWORK_END = 0x6440FFFF;   // 100.64.255.254
 
 // 默认 MTU
 export const DEFAULT_MTU = 1280;

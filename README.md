@@ -120,6 +120,13 @@ src/
 │   └── logger.js          # 日志工具
 ```
 
+## 参考项目
+
+本项目参考了以下开源实现：
+
+- **[lmq8267/vnts-cf](https://github.com/lmq8267/vnts-cf)** — Cloudflare Workers 上的 n2n 控制面，提供了 WebSocket 连接管理、社区状态维护、Peer 信息广播等核心模式。`GATEWAY_NAME`、`WHITE_TOKEN`、`LOG_PASSWORD` 等环境变量设计均借鉴于此。
+- **[NotTropical/easytier-ws-relay](https://github.com/NotTropical/easytier-ws-relay)** — 基于 easytier 的 WebSocket 中继实现，其 `wrangler.toml` 配置结构和 Durable Object 绑定方式为本项目提供了参考。
+
 ## License
 
 MIT

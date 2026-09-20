@@ -1,5 +1,5 @@
 /*eslint-disable block-scoped-var, id-length, no-control-regex, no-magic-numbers, no-mixed-operators, no-prototype-builtins, no-redeclare, no-shadow, no-var, sort-vars, default-case, jsdoc/require-param*/
-import $protobuf from "protobufjs/minimal.js";
+import $protobuf from "./protobuf-minimal-shim.js";
 
 // Common aliases
 const $Reader = $protobuf.Reader, $Writer = $protobuf.Writer, $util = $protobuf.util;
@@ -183,7 +183,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -598,7 +598,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -1079,7 +1079,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -1596,7 +1596,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -2039,7 +2039,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -2215,6 +2215,1209 @@ export const n2n = $root.n2n = (() => {
         };
 
         return PeerInfoList;
+    })();
+
+    n2n.PeerP2PInfos = (function() {
+
+        /**
+         * Properties of a PeerP2PInfos.
+         * @typedef {Object} n2n.PeerP2PInfos.$Properties
+         * @property {n2n.PeerInfo.$Properties|null} [from] PeerP2PInfos from
+         * @property {Array.<n2n.PeerInfo.$Properties>|null} [to] PeerP2PInfos to
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PeerP2PInfos.
+         * @memberof n2n
+         * @interface IPeerP2PInfos
+         * @augments n2n.PeerP2PInfos.$Properties
+         * @deprecated Use n2n.PeerP2PInfos.$Properties instead.
+         */
+
+        /**
+         * Shape of a PeerP2PInfos.
+         * @typedef {n2n.PeerP2PInfos.$Properties} n2n.PeerP2PInfos.$Shape
+         */
+
+        /**
+         * Constructs a new PeerP2PInfos.
+         * @memberof n2n
+         * @classdesc Represents a PeerP2PInfos.
+         * @constructor
+         * @param {n2n.PeerP2PInfos.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PeerP2PInfos = function (properties) {
+            this.to = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PeerP2PInfos from.
+         * @member {n2n.PeerInfo.$Properties|null|undefined} from
+         * @memberof n2n.PeerP2PInfos
+         * @instance
+         */
+        PeerP2PInfos.prototype.from = null;
+
+        /**
+         * PeerP2PInfos to.
+         * @member {Array.<n2n.PeerInfo.$Properties>} to
+         * @memberof n2n.PeerP2PInfos
+         * @instance
+         */
+        PeerP2PInfos.prototype.to = $util.emptyArray;
+
+        /**
+         * Creates a new PeerP2PInfos instance using the specified properties.
+         * @function create
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {n2n.PeerP2PInfos.$Properties=} [properties] Properties to set
+         * @returns {n2n.PeerP2PInfos} PeerP2PInfos instance
+         * @type {{
+         *   (properties: n2n.PeerP2PInfos.$Shape): n2n.PeerP2PInfos & n2n.PeerP2PInfos.$Shape;
+         *   (properties?: n2n.PeerP2PInfos.$Properties): n2n.PeerP2PInfos;
+         * }}
+         */
+        PeerP2PInfos.create = function(properties) {
+            return new PeerP2PInfos(properties);
+        };
+
+        /**
+         * Encodes the specified PeerP2PInfos message. Does not implicitly {@link n2n.PeerP2PInfos.verify|verify} messages.
+         * @function encode
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {n2n.PeerP2PInfos.$Properties} message PeerP2PInfos message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PeerP2PInfos.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.from != null && $Object.hasOwnProperty.call(message, "from"))
+                $root.n2n.PeerInfo.encode(message.from, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.to != null && message.to.length)
+                for (let i = 0; i < message.to.length; ++i)
+                    $root.n2n.PeerInfo.encode(message.to[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PeerP2PInfos message, length delimited. Does not implicitly {@link n2n.PeerP2PInfos.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {n2n.PeerP2PInfos.$Properties} message PeerP2PInfos message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PeerP2PInfos.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PeerP2PInfos message from the specified reader or buffer.
+         * @function decode
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {n2n.PeerP2PInfos & n2n.PeerP2PInfos.$Shape} PeerP2PInfos
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PeerP2PInfos.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.n2n.PeerP2PInfos();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.uint32();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.from = $root.n2n.PeerInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, message.from);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.to && message.to.length))
+                            message.to = [];
+                        message.to.push($root.n2n.PeerInfo.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                }
+                reader.skipType(wireType);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PeerP2PInfos message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {n2n.PeerP2PInfos & n2n.PeerP2PInfos.$Shape} PeerP2PInfos
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PeerP2PInfos.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PeerP2PInfos message.
+         * @function verify
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PeerP2PInfos.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.from != null && $Object.hasOwnProperty.call(message, "from")) {
+                let error = $root.n2n.PeerInfo.verify(message.from, _depth + 1);
+                if (error)
+                    return "from." + error;
+            }
+            if (message.to != null && $Object.hasOwnProperty.call(message, "to")) {
+                if (!$Array.isArray(message.to))
+                    return "to: array expected";
+                for (let i = 0; i < message.to.length; ++i) {
+                    let error = $root.n2n.PeerInfo.verify(message.to[i], _depth + 1);
+                    if (error)
+                        return "to." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PeerP2PInfos message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {n2n.PeerP2PInfos} PeerP2PInfos
+         */
+        PeerP2PInfos.fromObject = function (object, _depth) {
+            if (object instanceof $root.n2n.PeerP2PInfos)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".n2n.PeerP2PInfos: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.n2n.PeerP2PInfos();
+            if (object.from != null) {
+                if (!$util.isObject(object.from))
+                    throw $TypeError(".n2n.PeerP2PInfos.from: object expected");
+                message.from = $root.n2n.PeerInfo.fromObject(object.from, _depth + 1);
+            }
+            if (object.to) {
+                if (!$Array.isArray(object.to))
+                    throw $TypeError(".n2n.PeerP2PInfos.to: array expected");
+                message.to = $Array(object.to.length);
+                for (let i = 0; i < object.to.length; ++i) {
+                    if (!$util.isObject(object.to[i]))
+                        throw $TypeError(".n2n.PeerP2PInfos.to: object expected");
+                    message.to[i] = $root.n2n.PeerInfo.fromObject(object.to[i], _depth + 1);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PeerP2PInfos message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {n2n.PeerP2PInfos} message PeerP2PInfos
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PeerP2PInfos.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.to = [];
+            if (options.defaults)
+                object.from = null;
+            if (message.from != null && $Object.hasOwnProperty.call(message, "from"))
+                object.from = $root.n2n.PeerInfo.toObject(message.from, options, _depth + 1);
+            if (message.to && message.to.length) {
+                object.to = $Array(message.to.length);
+                for (let j = 0; j < message.to.length; ++j)
+                    object.to[j] = $root.n2n.PeerInfo.toObject(message.to[j], options, _depth + 1);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this PeerP2PInfos to JSON.
+         * @function toJSON
+         * @memberof n2n.PeerP2PInfos
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PeerP2PInfos.prototype.toJSON = function() {
+            return PeerP2PInfos.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PeerP2PInfos
+         * @function getTypeUrl
+         * @memberof n2n.PeerP2PInfos
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PeerP2PInfos.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/n2n.PeerP2PInfos";
+        };
+
+        return PeerP2PInfos;
+    })();
+
+    n2n.P2PFullState = (function() {
+
+        /**
+         * Properties of a P2PFullState.
+         * @typedef {Object} n2n.P2PFullState.$Properties
+         * @property {string|null} [communityName] P2PFullState communityName
+         * @property {boolean|null} [isRequest] P2PFullState isRequest
+         * @property {Object.<string,n2n.PeerP2PInfos.$Properties>|null} [reachables] P2PFullState reachables
+         * @property {Object.<string,n2n.PeerCachedInfo.$Properties>|null} [unreachables] P2PFullState unreachables
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a P2PFullState.
+         * @memberof n2n
+         * @interface IP2PFullState
+         * @augments n2n.P2PFullState.$Properties
+         * @deprecated Use n2n.P2PFullState.$Properties instead.
+         */
+
+        /**
+         * Shape of a P2PFullState.
+         * @typedef {n2n.P2PFullState.$Properties} n2n.P2PFullState.$Shape
+         */
+
+        /**
+         * Constructs a new P2PFullState.
+         * @memberof n2n
+         * @classdesc Represents a P2PFullState.
+         * @constructor
+         * @param {n2n.P2PFullState.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const P2PFullState = function (properties) {
+            this.reachables = {};
+            this.unreachables = {};
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * P2PFullState communityName.
+         * @member {string} communityName
+         * @memberof n2n.P2PFullState
+         * @instance
+         */
+        P2PFullState.prototype.communityName = "";
+
+        /**
+         * P2PFullState isRequest.
+         * @member {boolean} isRequest
+         * @memberof n2n.P2PFullState
+         * @instance
+         */
+        P2PFullState.prototype.isRequest = false;
+
+        /**
+         * P2PFullState reachables.
+         * @member {Object.<string,n2n.PeerP2PInfos.$Properties>} reachables
+         * @memberof n2n.P2PFullState
+         * @instance
+         */
+        P2PFullState.prototype.reachables = $util.emptyObject;
+
+        /**
+         * P2PFullState unreachables.
+         * @member {Object.<string,n2n.PeerCachedInfo.$Properties>} unreachables
+         * @memberof n2n.P2PFullState
+         * @instance
+         */
+        P2PFullState.prototype.unreachables = $util.emptyObject;
+
+        /**
+         * Creates a new P2PFullState instance using the specified properties.
+         * @function create
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {n2n.P2PFullState.$Properties=} [properties] Properties to set
+         * @returns {n2n.P2PFullState} P2PFullState instance
+         * @type {{
+         *   (properties: n2n.P2PFullState.$Shape): n2n.P2PFullState & n2n.P2PFullState.$Shape;
+         *   (properties?: n2n.P2PFullState.$Properties): n2n.P2PFullState;
+         * }}
+         */
+        P2PFullState.create = function(properties) {
+            return new P2PFullState(properties);
+        };
+
+        /**
+         * Encodes the specified P2PFullState message. Does not implicitly {@link n2n.P2PFullState.verify|verify} messages.
+         * @function encode
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {n2n.P2PFullState.$Properties} message P2PFullState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        P2PFullState.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.communityName != null && $Object.hasOwnProperty.call(message, "communityName") && message.communityName !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.communityName);
+            if (message.isRequest != null && $Object.hasOwnProperty.call(message, "isRequest") && message.isRequest !== false)
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.isRequest);
+            if (message.reachables != null && $Object.hasOwnProperty.call(message, "reachables"))
+                for (let keys = $Object.keys(message.reachables), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.n2n.PeerP2PInfos.encode(message.reachables[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
+                }
+            if (message.unreachables != null && $Object.hasOwnProperty.call(message, "unreachables"))
+                for (let keys = $Object.keys(message.unreachables), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.n2n.PeerCachedInfo.encode(message.unreachables[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
+                }
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified P2PFullState message, length delimited. Does not implicitly {@link n2n.P2PFullState.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {n2n.P2PFullState.$Properties} message P2PFullState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        P2PFullState.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a P2PFullState message from the specified reader or buffer.
+         * @function decode
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {n2n.P2PFullState & n2n.P2PFullState.$Shape} P2PFullState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        P2PFullState.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, key, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.n2n.P2PFullState();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.uint32();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.string()).length)
+                            message.communityName = value;
+                        else
+                            delete message.communityName;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.isRequest = value;
+                        else
+                            delete message.isRequest;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.reachables === $util.emptyObject)
+                            message.reachables = {};
+                        let end2 = reader.uint32() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = null;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.uint32();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.string();
+                                continue;
+                            case 2:
+                                if (wireType !== 2)
+                                    break;
+                                value = $root.n2n.PeerP2PInfos.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.reachables, key);
+                        message.reachables[key] = value || new $root.n2n.PeerP2PInfos();
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.unreachables === $util.emptyObject)
+                            message.unreachables = {};
+                        let end2 = reader.uint32() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = null;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.uint32();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.string();
+                                continue;
+                            case 2:
+                                if (wireType !== 2)
+                                    break;
+                                value = $root.n2n.PeerCachedInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.unreachables, key);
+                        message.unreachables[key] = value || new $root.n2n.PeerCachedInfo();
+                        continue;
+                    }
+                }
+                reader.skipType(wireType);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a P2PFullState message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {n2n.P2PFullState & n2n.P2PFullState.$Shape} P2PFullState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        P2PFullState.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a P2PFullState message.
+         * @function verify
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        P2PFullState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.communityName != null && $Object.hasOwnProperty.call(message, "communityName"))
+                if (!$util.isString(message.communityName))
+                    return "communityName: string expected";
+            if (message.isRequest != null && $Object.hasOwnProperty.call(message, "isRequest"))
+                if (typeof message.isRequest !== "boolean")
+                    return "isRequest: boolean expected";
+            if (message.reachables != null && $Object.hasOwnProperty.call(message, "reachables")) {
+                if (!$util.isObject(message.reachables))
+                    return "reachables: object expected";
+                let key = $Object.keys(message.reachables);
+                for (let i = 0; i < key.length; ++i) {
+                    let error = $root.n2n.PeerP2PInfos.verify(message.reachables[key[i]], _depth + 1);
+                    if (error)
+                        return "reachables." + error;
+                }
+            }
+            if (message.unreachables != null && $Object.hasOwnProperty.call(message, "unreachables")) {
+                if (!$util.isObject(message.unreachables))
+                    return "unreachables: object expected";
+                let key = $Object.keys(message.unreachables);
+                for (let i = 0; i < key.length; ++i) {
+                    let error = $root.n2n.PeerCachedInfo.verify(message.unreachables[key[i]], _depth + 1);
+                    if (error)
+                        return "unreachables." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a P2PFullState message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {n2n.P2PFullState} P2PFullState
+         */
+        P2PFullState.fromObject = function (object, _depth) {
+            if (object instanceof $root.n2n.P2PFullState)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".n2n.P2PFullState: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.n2n.P2PFullState();
+            if (object.communityName != null)
+                if (typeof object.communityName !== "string" || object.communityName.length)
+                    message.communityName = $String(object.communityName);
+            if (object.isRequest != null)
+                if (object.isRequest)
+                    message.isRequest = $Boolean(object.isRequest);
+            if (object.reachables) {
+                if (!$util.isObject(object.reachables))
+                    throw $TypeError(".n2n.P2PFullState.reachables: object expected");
+                message.reachables = {};
+                for (let keys = $Object.keys(object.reachables), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.reachables, keys[i]);
+                    if (!$util.isObject(object.reachables[keys[i]]))
+                        throw $TypeError(".n2n.P2PFullState.reachables: object expected");
+                    message.reachables[keys[i]] = $root.n2n.PeerP2PInfos.fromObject(object.reachables[keys[i]], _depth + 1);
+                }
+            }
+            if (object.unreachables) {
+                if (!$util.isObject(object.unreachables))
+                    throw $TypeError(".n2n.P2PFullState.unreachables: object expected");
+                message.unreachables = {};
+                for (let keys = $Object.keys(object.unreachables), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.unreachables, keys[i]);
+                    if (!$util.isObject(object.unreachables[keys[i]]))
+                        throw $TypeError(".n2n.P2PFullState.unreachables: object expected");
+                    message.unreachables[keys[i]] = $root.n2n.PeerCachedInfo.fromObject(object.unreachables[keys[i]], _depth + 1);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a P2PFullState message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {n2n.P2PFullState} message P2PFullState
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        P2PFullState.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.objects || options.defaults) {
+                object.reachables = {};
+                object.unreachables = {};
+            }
+            if (options.defaults) {
+                object.communityName = "";
+                object.isRequest = false;
+            }
+            if (message.communityName != null && $Object.hasOwnProperty.call(message, "communityName"))
+                object.communityName = message.communityName;
+            if (message.isRequest != null && $Object.hasOwnProperty.call(message, "isRequest"))
+                object.isRequest = message.isRequest;
+            let keys2;
+            if (message.reachables && (keys2 = $Object.keys(message.reachables)).length) {
+                object.reachables = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.reachables, keys2[j]);
+                    object.reachables[keys2[j]] = $root.n2n.PeerP2PInfos.toObject(message.reachables[keys2[j]], options, _depth + 1);
+                }
+            }
+            if (message.unreachables && (keys2 = $Object.keys(message.unreachables)).length) {
+                object.unreachables = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.unreachables, keys2[j]);
+                    object.unreachables[keys2[j]] = $root.n2n.PeerCachedInfo.toObject(message.unreachables[keys2[j]], options, _depth + 1);
+                }
+            }
+            return object;
+        };
+
+        /**
+         * Converts this P2PFullState to JSON.
+         * @function toJSON
+         * @memberof n2n.P2PFullState
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        P2PFullState.prototype.toJSON = function() {
+            return P2PFullState.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for P2PFullState
+         * @function getTypeUrl
+         * @memberof n2n.P2PFullState
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        P2PFullState.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/n2n.P2PFullState";
+        };
+
+        return P2PFullState;
+    })();
+
+    n2n.PeerCachedInfo = (function() {
+
+        /**
+         * Properties of a PeerCachedInfo.
+         * @typedef {Object} n2n.PeerCachedInfo.$Properties
+         * @property {string|null} [desc] PeerCachedInfo desc
+         * @property {string|null} [macAddr] PeerCachedInfo macAddr
+         * @property {string|null} [virtualIp] PeerCachedInfo virtualIp
+         * @property {string|null} [community] PeerCachedInfo community
+         * @property {number|Long|null} [lastUpdateNs] PeerCachedInfo lastUpdateNs
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PeerCachedInfo.
+         * @memberof n2n
+         * @interface IPeerCachedInfo
+         * @augments n2n.PeerCachedInfo.$Properties
+         * @deprecated Use n2n.PeerCachedInfo.$Properties instead.
+         */
+
+        /**
+         * Shape of a PeerCachedInfo.
+         * @typedef {n2n.PeerCachedInfo.$Properties} n2n.PeerCachedInfo.$Shape
+         */
+
+        /**
+         * Constructs a new PeerCachedInfo.
+         * @memberof n2n
+         * @classdesc Represents a PeerCachedInfo.
+         * @constructor
+         * @param {n2n.PeerCachedInfo.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PeerCachedInfo = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PeerCachedInfo desc.
+         * @member {string} desc
+         * @memberof n2n.PeerCachedInfo
+         * @instance
+         */
+        PeerCachedInfo.prototype.desc = "";
+
+        /**
+         * PeerCachedInfo macAddr.
+         * @member {string} macAddr
+         * @memberof n2n.PeerCachedInfo
+         * @instance
+         */
+        PeerCachedInfo.prototype.macAddr = "";
+
+        /**
+         * PeerCachedInfo virtualIp.
+         * @member {string} virtualIp
+         * @memberof n2n.PeerCachedInfo
+         * @instance
+         */
+        PeerCachedInfo.prototype.virtualIp = "";
+
+        /**
+         * PeerCachedInfo community.
+         * @member {string} community
+         * @memberof n2n.PeerCachedInfo
+         * @instance
+         */
+        PeerCachedInfo.prototype.community = "";
+
+        /**
+         * PeerCachedInfo lastUpdateNs.
+         * @member {number|Long} lastUpdateNs
+         * @memberof n2n.PeerCachedInfo
+         * @instance
+         */
+        PeerCachedInfo.prototype.lastUpdateNs = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new PeerCachedInfo instance using the specified properties.
+         * @function create
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {n2n.PeerCachedInfo.$Properties=} [properties] Properties to set
+         * @returns {n2n.PeerCachedInfo} PeerCachedInfo instance
+         * @type {{
+         *   (properties: n2n.PeerCachedInfo.$Shape): n2n.PeerCachedInfo & n2n.PeerCachedInfo.$Shape;
+         *   (properties?: n2n.PeerCachedInfo.$Properties): n2n.PeerCachedInfo;
+         * }}
+         */
+        PeerCachedInfo.create = function(properties) {
+            return new PeerCachedInfo(properties);
+        };
+
+        /**
+         * Encodes the specified PeerCachedInfo message. Does not implicitly {@link n2n.PeerCachedInfo.verify|verify} messages.
+         * @function encode
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {n2n.PeerCachedInfo.$Properties} message PeerCachedInfo message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PeerCachedInfo.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.desc != null && $Object.hasOwnProperty.call(message, "desc") && message.desc !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.desc);
+            if (message.macAddr != null && $Object.hasOwnProperty.call(message, "macAddr") && message.macAddr !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.macAddr);
+            if (message.virtualIp != null && $Object.hasOwnProperty.call(message, "virtualIp") && message.virtualIp !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.virtualIp);
+            if (message.community != null && $Object.hasOwnProperty.call(message, "community") && message.community !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.community);
+            if (message.lastUpdateNs != null && $Object.hasOwnProperty.call(message, "lastUpdateNs") && (typeof message.lastUpdateNs === "object" ? message.lastUpdateNs.low || message.lastUpdateNs.high : message.lastUpdateNs !== 0))
+                writer.uint32(/* id 5, wireType 0 =*/40).int64(message.lastUpdateNs);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PeerCachedInfo message, length delimited. Does not implicitly {@link n2n.PeerCachedInfo.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {n2n.PeerCachedInfo.$Properties} message PeerCachedInfo message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PeerCachedInfo.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PeerCachedInfo message from the specified reader or buffer.
+         * @function decode
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {n2n.PeerCachedInfo & n2n.PeerCachedInfo.$Shape} PeerCachedInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PeerCachedInfo.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.n2n.PeerCachedInfo();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.uint32();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.string()).length)
+                            message.desc = value;
+                        else
+                            delete message.desc;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.string()).length)
+                            message.macAddr = value;
+                        else
+                            delete message.macAddr;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.string()).length)
+                            message.virtualIp = value;
+                        else
+                            delete message.virtualIp;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.string()).length)
+                            message.community = value;
+                        else
+                            delete message.community;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.lastUpdateNs = value;
+                        else
+                            delete message.lastUpdateNs;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PeerCachedInfo message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {n2n.PeerCachedInfo & n2n.PeerCachedInfo.$Shape} PeerCachedInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PeerCachedInfo.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PeerCachedInfo message.
+         * @function verify
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PeerCachedInfo.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.desc != null && $Object.hasOwnProperty.call(message, "desc"))
+                if (!$util.isString(message.desc))
+                    return "desc: string expected";
+            if (message.macAddr != null && $Object.hasOwnProperty.call(message, "macAddr"))
+                if (!$util.isString(message.macAddr))
+                    return "macAddr: string expected";
+            if (message.virtualIp != null && $Object.hasOwnProperty.call(message, "virtualIp"))
+                if (!$util.isString(message.virtualIp))
+                    return "virtualIp: string expected";
+            if (message.community != null && $Object.hasOwnProperty.call(message, "community"))
+                if (!$util.isString(message.community))
+                    return "community: string expected";
+            if (message.lastUpdateNs != null && $Object.hasOwnProperty.call(message, "lastUpdateNs"))
+                if (!$util.isInteger(message.lastUpdateNs) && !(message.lastUpdateNs && $util.isInteger(message.lastUpdateNs.low) && $util.isInteger(message.lastUpdateNs.high)))
+                    return "lastUpdateNs: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates a PeerCachedInfo message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {n2n.PeerCachedInfo} PeerCachedInfo
+         */
+        PeerCachedInfo.fromObject = function (object, _depth) {
+            if (object instanceof $root.n2n.PeerCachedInfo)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".n2n.PeerCachedInfo: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.n2n.PeerCachedInfo();
+            if (object.desc != null)
+                if (typeof object.desc !== "string" || object.desc.length)
+                    message.desc = $String(object.desc);
+            if (object.macAddr != null)
+                if (typeof object.macAddr !== "string" || object.macAddr.length)
+                    message.macAddr = $String(object.macAddr);
+            if (object.virtualIp != null)
+                if (typeof object.virtualIp !== "string" || object.virtualIp.length)
+                    message.virtualIp = $String(object.virtualIp);
+            if (object.community != null)
+                if (typeof object.community !== "string" || object.community.length)
+                    message.community = $String(object.community);
+            if (object.lastUpdateNs != null)
+                if (typeof object.lastUpdateNs === "object" ? object.lastUpdateNs.low || object.lastUpdateNs.high : $Number(object.lastUpdateNs) !== 0)
+                    if ($util.Long)
+                        message.lastUpdateNs = $util.Long.fromValue(object.lastUpdateNs, false);
+                    else if (typeof object.lastUpdateNs === "string")
+                        message.lastUpdateNs = $parseInt(object.lastUpdateNs, 10);
+                    else if (typeof object.lastUpdateNs === "number")
+                        message.lastUpdateNs = object.lastUpdateNs;
+                    else if (typeof object.lastUpdateNs === "object")
+                        message.lastUpdateNs = new $util.LongBits(object.lastUpdateNs.low >>> 0, object.lastUpdateNs.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PeerCachedInfo message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {n2n.PeerCachedInfo} message PeerCachedInfo
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PeerCachedInfo.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.desc = "";
+                object.macAddr = "";
+                object.virtualIp = "";
+                object.community = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.lastUpdateNs = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.lastUpdateNs = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.desc != null && $Object.hasOwnProperty.call(message, "desc"))
+                object.desc = message.desc;
+            if (message.macAddr != null && $Object.hasOwnProperty.call(message, "macAddr"))
+                object.macAddr = message.macAddr;
+            if (message.virtualIp != null && $Object.hasOwnProperty.call(message, "virtualIp"))
+                object.virtualIp = message.virtualIp;
+            if (message.community != null && $Object.hasOwnProperty.call(message, "community"))
+                object.community = message.community;
+            if (message.lastUpdateNs != null && $Object.hasOwnProperty.call(message, "lastUpdateNs"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.lastUpdateNs = typeof message.lastUpdateNs === "number" ? $BigInt(message.lastUpdateNs) : $util.Long.fromBits(message.lastUpdateNs.low >>> 0, message.lastUpdateNs.high >>> 0, false).toBigInt();
+                else if (typeof message.lastUpdateNs === "number")
+                    object.lastUpdateNs = options.longs === $String ? $String(message.lastUpdateNs) : message.lastUpdateNs;
+                else
+                    object.lastUpdateNs = options.longs === $String ? $util.Long.prototype.toString.call(message.lastUpdateNs) : options.longs === $Number ? new $util.LongBits(message.lastUpdateNs.low >>> 0, message.lastUpdateNs.high >>> 0).toNumber() : message.lastUpdateNs;
+            return object;
+        };
+
+        /**
+         * Converts this PeerCachedInfo to JSON.
+         * @function toJSON
+         * @memberof n2n.PeerCachedInfo
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PeerCachedInfo.prototype.toJSON = function() {
+            return PeerCachedInfo.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PeerCachedInfo
+         * @function getTypeUrl
+         * @memberof n2n.PeerCachedInfo
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PeerCachedInfo.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/n2n.PeerCachedInfo";
+        };
+
+        return PeerCachedInfo;
     })();
 
     n2n.ICECandidate = (function() {
@@ -2423,7 +3626,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -2787,7 +3990,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -3182,7 +4385,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -3595,7 +4798,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -3937,7 +5140,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -4301,7 +5504,7 @@ export const n2n = $root.n2n = (() => {
                         continue;
                     }
                 }
-                reader.skipType(wireType, _depth, tag);
+                reader.skipType(wireType);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));

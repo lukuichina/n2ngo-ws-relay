@@ -11,13 +11,17 @@ import { IPAM } from "./ipam.js";
 import { numberToIp } from "./constants.js";
 
 export class CommunityState {
-  constructor(community, relayRoom) {
+  constructor(community, relayRoom, networkConfig) {
     this.community = community;
     this.relayRoom = relayRoom;
-    this.ipam = new IPAM(relayRoom.state.storage, community);
+    this.ipam = new IPAM(relayRoom.state.storage, community, networkConfig);
 
     // Peer 注册表: macAddr -> PeerInfo
     this.peers = new Map();
+
+    // P2P 状态表: macAddr -> PeerP2PInfos (reachables)
+    // 对应 Go 侧 Community.communityPeerP2PInfos
+    this.p2pInfos = new Map();
 
     // 待广播的 Peer 变更队列
     this.pendingPeerUpdates = [];
@@ -208,6 +212,67 @@ export class CommunityState {
   }
 
   /**
+   * 设置/更新 P2P 状态信息 (PeerP2PInfos)
+   * 对应 Go 侧 Community.SetP2PInfosFor
+   * @param {string} edgeMacADDR
+   * @param {Object} infos - PeerP2PInfos { from, to }
+   */
+  setP2PInfosFor(edgeMacADDR, infos) {
+    const normalizedMAC = edgeMacADDR.toLowerCase();
+    const peer = this.peers.get(normalizedMAC);
+    if (!peer) {
+      console.warn(`[Community-${this.community}] setP2PInfosFor: unknown edge ${normalizedMAC}`);
+      return false;
+    }
+    this.p2pInfos.set(normalizedMAC, infos);
+    return true;
+  }
+
+  /**
+   * 获取社区 P2P 全量状态
+   * 对应 Go 侧 Community.GetCommunityPeerP2PInfosDatas
+   * @param {string} reqMACAddr - 请求者 MAC
+   * @returns {Object} P2PFullState { communityName, isRequest, reachables, unreachables }
+   */
+  getP2PFullState(reqMACAddr) {
+    const normalizedMAC = reqMACAddr.toLowerCase();
+    const peer = this.peers.get(normalizedMAC);
+    if (!peer) {
+      return null;
+    }
+
+    // Reachables: 当前在线 peer 的 P2P 状态
+    const reachables = {};
+    for (const [mac, p] of this.peers) {
+      if (!p.online) continue;
+      const p2pInfo = this.p2pInfos.get(mac);
+      if (p2pInfo) {
+        reachables[mac] = p2pInfo;
+      }
+    }
+
+    // Unreachables: 离线 peer 缓存信息
+    const unreachables = {};
+    for (const [mac, p] of this.peers) {
+      if (p.online) continue;
+      unreachables[mac] = {
+        desc: p.desc || "",
+        macAddr: p.macAddr || mac,
+        virtualIp: typeof p.virtualIP === 'number' ? numberToIp(p.virtualIP) : (p.virtualIP || ""),
+        community: this.community,
+        lastUpdateNs: 0,
+      };
+    }
+
+    return {
+      communityName: this.community,
+      isRequest: false,
+      reachables,
+      unreachables,
+    };
+  }
+
+  /**
    * 构建 PeerInfoList (用于下发给客户端)
    * 返回 protobuf 格式的对象，字段名与 proto 定义一致
    * @param {string} [originMAC] - 请求者 MAC (用于填充 Origin 字段)
@@ -309,7 +374,7 @@ export class CommunityManager {
   async getCommunity(name) {
     let community = this.communities.get(name);
     if (!community) {
-      community = new CommunityState(name, this.relayRoom);
+      community = new CommunityState(name, this.relayRoom, this.relayRoom.networkConfig);
       await community.load();
       this.communities.set(name, community);
     }

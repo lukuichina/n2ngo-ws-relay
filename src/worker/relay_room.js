@@ -441,17 +441,23 @@ export class RelayRoom {
   <div class="card">
     <h1>${this.env.GATEWAY_NAME || "n2n-go Control Plane"}</h1>
     ${error ? `<div class="error">${error}</div>` : ''}
-    <form method="GET" action="/room">
+    <form method="GET" action="/room" id="loginForm">
       <div class="form-group">
         <label>Community Token</label>
-        <input type="text" name="token" required placeholder="Enter community token">
+        <input type="text" name="token" required placeholder="Enter community token" id="tokenInput">
       </div>
+      <input type="hidden" name="community" id="communityInput">
       <div class="form-group">
         <label>Gateway IP (first 3 octets)</label>
         <input type="text" name="ip" required placeholder="e.g. 100.64.0">
       </div>
       <button type="submit">View Devices</button>
     </form>
+    <script>
+      document.getElementById('loginForm').addEventListener('submit', function(e) {
+        document.getElementById('communityInput').value = document.getElementById('tokenInput').value;
+      });
+    </script>
   </div>
 </body></html>`;
   }

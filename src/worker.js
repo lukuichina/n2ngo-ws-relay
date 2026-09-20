@@ -63,7 +63,7 @@ export default {
 
     // 设备列表查询端点 (HTML 页面)
     if (pathname === "/room") {
-      const community = searchParams.get("community") || "default";
+      const community = searchParams.get("community") || searchParams.get("token") || "default";
       const roomStub = env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(community), options);
       return roomStub.fetch(request);
     }

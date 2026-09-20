@@ -53,6 +53,31 @@ message PeerInfoList {
   uint32 event_type = 4;
 }
 
+// 对应 Go 中的 PeerP2PInfos (p2p.proto)
+message PeerP2PInfos {
+  PeerInfo from = 1;
+  repeated PeerInfo to = 2;
+}
+
+// 对应 Go 中的 P2PFullState (p2p.proto)
+message P2PFullState {
+  string community_name = 1;
+  bool is_request = 2;
+  // Reachables: map<string, PeerP2PInfos>
+  map<string, PeerP2PInfos> reachables = 3;
+  // UnReachables: map<string, PeerCachedInfo>
+  map<string, PeerCachedInfo> unreachables = 4;
+}
+
+// 对应 Go 中的 PeerCachedInfo (p2p.proto)
+message PeerCachedInfo {
+  string desc = 1;
+  string mac_addr = 2;
+  string virtual_ip = 3;
+  string community = 4;
+  int64 last_update_ns = 5;
+}
+
 // ICE Candidate 信令消息
 message ICECandidate {
   string target_mac = 1;

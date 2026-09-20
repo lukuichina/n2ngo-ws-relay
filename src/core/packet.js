@@ -21,6 +21,7 @@ import {
   numberToIp,
   VFuze_HEADER_SIZE,
   PeerInfoEvent,
+  Flags,
 } from "./constants.js";
 import { encode, decode, getType } from "./protos.js";
 

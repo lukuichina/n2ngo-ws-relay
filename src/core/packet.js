@@ -125,6 +125,11 @@ export function flagPacketFromSupernode(packet) {
 
 // ---------- RegisterRequest ----------
 
+function macToBytes(mac) {
+  if (typeof mac === 'string') return macStrToBytes(mac);
+  return mac instanceof Uint8Array ? mac : new Uint8Array(mac);
+}
+
 function macStrToBytes(macStr) {
   const parts = macStr.split(':').map(p => parseInt(p, 16));
   return new Uint8Array(parts);
@@ -143,6 +148,8 @@ export function encodeRegisterRequest(msg) {
     encryptedMachineId: msg.encryptedMachineID || new Uint8Array(0),
     p2pEndpoint: msg.p2pEndpoint || "",
     p2pCapabilities: msg.p2pCapabilities || [],
+    pubSocket: msg.pubSocket || "",
+    natType: msg.natType || "unknown",
   });
 }
 
@@ -154,6 +161,8 @@ export function decodeRegisterRequest(buf) {
     encryptedMachineID: data.encryptedMachineId || new Uint8Array(0),
     p2pEndpoint: data.p2pEndpoint || "",
     p2pCapabilities: data.p2pCapabilities || [],
+    natType: data.natType || "unknown",
+    pubSocket: data.pubSocket || "",
   };
 }
 
@@ -167,6 +176,9 @@ export function encodeRegisterResponse(msg) {
   const peers = (msg.peers || []).map(p => {
     // 兼容两种命名风格: context.js 使用 snake_case, 其他地方使用 camelCase
     const macAddr = p.mac_addr || p.macAddr;
+    // macAddr may already be a Uint8Array (from buildPeerInfoList) or a
+    // string ("0a:e3:8f:...") — handle both forms.
+    const macBytes = typeof macAddr === 'string' ? macStrToBytes(macAddr) : macAddr;
     const vIP = typeof p.virtual_ip === 'number'
       ? numberToIp(p.virtual_ip)
       : (typeof p.virtualIP === 'number' ? numberToIp(p.virtualIP) : (p.virtual_ip || p.virtualIP));
@@ -183,7 +195,7 @@ export function encodeRegisterResponse(msg) {
 
     return {
       virtualIp: vIP,
-      macAddr: macStrToBytes(macAddr),
+      macAddr: macBytes,
       pubSocket: pubSocket,
       p2pEndpoint: p.p2p_endpoint || p.p2pEndpoint || "",
       natType: p.nat_type || p.natType || "unknown",
@@ -252,24 +264,28 @@ export function encodePeerInfoList(list) {
     virtualIp: typeof originList.virtual_ip === 'number'
       ? numberToIp(originList.virtual_ip)
       : (typeof originList.virtualIP === 'number' ? numberToIp(originList.virtualIP) : (originList.virtual_ip || originList.virtualIP)),
-    macAddr: macStrToBytes(originList.mac_addr || originList.macAddr),
+    macAddr: macToBytes(originList.mac_addr || originList.macAddr),
     pubSocket: toPubSocketStr(originList.pub_socket || originList.pubSocket),
     p2pEndpoint: originList.p2p_endpoint || originList.p2pEndpoint || "",
     natType: originList.nat_type || originList.natType || "unknown",
     lastSeen: originList.last_seen || originList.lastSeen || Math.floor(Date.now() / 1000),
     p2pCapabilities: originList.capabilities || originList.p2p_capabilities || originList.p2pCapabilities || [],
+    natHoleInstruction: originList.nat_hole_instruction || originList.natHoleInstruction || null,
+    observedRaddr: originList.observed_raddr || originList.observedRaddr || "",
   } : null;
 
   const peerInfos = (peerInfoList || []).map(p => ({
     virtualIp: typeof p.virtual_ip === 'number'
       ? numberToIp(p.virtual_ip)
       : (typeof p.virtualIP === 'number' ? numberToIp(p.virtualIP) : (p.virtual_ip || p.virtualIP)),
-    macAddr: macStrToBytes(p.mac_addr || p.macAddr),
+    macAddr: macToBytes(p.mac_addr || p.macAddr),
     pubSocket: toPubSocketStr(p.pub_socket || p.pubSocket),
     p2pEndpoint: p.p2p_endpoint || p.p2pEndpoint || "",
     natType: p.nat_type || p.natType || "unknown",
     lastSeen: p.last_seen || p.lastSeen || Math.floor(Date.now() / 1000),
     p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
+    natHoleInstruction: p.nat_hole_instruction || p.natHoleInstruction || null,
+    observedRaddr: p.observed_raddr || p.observedRaddr || "",
   }));
 
   return encode("PeerInfoList", {
@@ -291,6 +307,8 @@ export function decodePeerInfoList(buf) {
       natType: data.origin.natType,
       lastSeen: data.origin.lastSeen,
       capabilities: data.origin.p2pCapabilities || [],
+      natHoleInstruction: data.origin.natHoleInstruction || null,
+      observedRaddr: data.origin.observedRaddr || "",
     } : null,
     hasOrigin: data.hasOrigin || false,
     peerInfos: (data.peerInfos || []).map(p => {
@@ -306,6 +324,8 @@ export function decodePeerInfoList(buf) {
         natType: p.natType || "unknown",
         lastSeen: p.lastSeen || 0,
         capabilities: p.p2pCapabilities || [],
+        natHoleInstruction: p.natHoleInstruction || null,
+        observedRaddr: p.observedRaddr || "",
       };
     }),
     eventType: data.eventType || PeerInfoEvent.TypeList,
@@ -384,7 +404,7 @@ export function decodeTURNCredentials(buf) {
 export function encodePeerP2PInfos(msg) {
   const from = msg.from ? {
     virtualIp: msg.from.virtualIp || msg.from.virtual_ip || "",
-    macAddr: macStrToBytes(msg.from.macAddr || msg.from.mac_addr),
+    macAddr: macToBytes(msg.from.macAddr || msg.from.mac_addr),
     pubSocket: toPubSocketStr(msg.from.pubSocket || msg.from.pub_socket),
     p2pEndpoint: msg.from.p2pEndpoint || msg.from.p2p_endpoint || "",
     natType: msg.from.natType || msg.from.nat_type || "unknown",
@@ -396,7 +416,7 @@ export function encodePeerP2PInfos(msg) {
     virtualIp: typeof p.virtual_ip === 'number'
       ? numberToIp(p.virtual_ip)
       : (typeof p.virtualIP === 'number' ? numberToIp(p.virtualIP) : (p.virtual_ip || p.virtualIP)),
-    macAddr: macStrToBytes(p.mac_addr || p.macAddr),
+    macAddr: macToBytes(p.mac_addr || p.macAddr),
     pubSocket: toPubSocketStr(p.pub_socket || p.pubSocket),
     p2pEndpoint: p.p2p_endpoint || p.p2pEndpoint || "",
     natType: p.nat_type || p.natType || "unknown",
@@ -417,6 +437,7 @@ export function decodePeerP2PInfos(buf) {
     natType: data.from.natType || data.from.nat_type || "unknown",
     lastSeen: data.from.lastSeen || data.from.last_seen || 0,
     p2pCapabilities: data.from.capabilities || data.from.p2p_capabilities || data.from.p2pCapabilities || [],
+    observedRaddr: data.from.observedRaddr || data.from.observed_raddr || "",
   } : null;
 
   const to = (data.to || []).map(p => ({
@@ -427,6 +448,7 @@ export function decodePeerP2PInfos(buf) {
     natType: p.natType || p.nat_type || "unknown",
     lastSeen: p.lastSeen || p.last_seen || 0,
     p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
+    observedRaddr: p.observedRaddr || p.observed_raddr || "",
   }));
 
   return { from, to };
@@ -443,7 +465,7 @@ export function encodeP2PFullState(msg) {
       reachables[mac] = {
         from: infos.from ? {
           virtualIp: infos.from.virtualIp || infos.from.virtual_ip || "",
-          macAddr: macStrToBytes(infos.from.macAddr || infos.from.mac_addr),
+          macAddr: macToBytes(infos.from.macAddr || infos.from.mac_addr),
           pubSocket: toPubSocketStr(infos.from.pubSocket || infos.from.pub_socket),
           p2pEndpoint: infos.from.p2pEndpoint || infos.from.p2p_endpoint || "",
           natType: infos.from.natType || infos.from.nat_type || "unknown",
@@ -454,7 +476,7 @@ export function encodeP2PFullState(msg) {
           virtualIp: typeof p.virtual_ip === 'number'
             ? numberToIp(p.virtual_ip)
             : (typeof p.virtualIP === 'number' ? numberToIp(p.virtualIP) : (p.virtual_ip || p.virtualIP)),
-          macAddr: macStrToBytes(p.mac_addr || p.macAddr),
+          macAddr: macToBytes(p.mac_addr || p.macAddr),
           pubSocket: toPubSocketStr(p.pub_socket || p.pubSocket),
           p2pEndpoint: p.p2p_endpoint || p.p2pEndpoint || "",
           natType: p.nat_type || p.natType || "unknown",

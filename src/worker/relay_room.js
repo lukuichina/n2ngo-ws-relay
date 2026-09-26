@@ -212,6 +212,10 @@ export class RelayRoom {
       return this.handleLogEndpoint(request, searchParams);
     }
 
+    if (pathname === "/nat-hole-backoff") {
+      return this.debugNatHoleBackoff();
+    }
+
     return new Response("Not found", { status: 404 });
   }
 
@@ -230,6 +234,12 @@ export class RelayRoom {
       // 防止 edge 断线重连后，旧连接的 onClose 覆盖新连接的 online 状态
       if (peer && peer.ws === ws) {
         await commState.unregisterPeer(connInfo.macAddr);
+
+        // A peer that goes away invalidates every cached punch decision for
+        // its pairs. Dropping them means the next coordinateNatHole() pass
+        // re-coordinates immediately instead of waiting out a backoff that
+        // was computed for a session that no longer exists.
+        this.packetHandler.clearPairStateFor(connInfo.macAddr);
 
         // 广播下线通知
         await this.packetHandler.broadcastPeerInfo(commState, { macAddr: connInfo.macAddr }, 3); // PeerInfoEvent.TypeUnregister
@@ -473,7 +483,7 @@ export class RelayRoom {
         <td>${peer.p2pEndpoint || '-'}</td>
         <td>${peer.natType || 'unknown'}</td>
         <td>${isOnline ? '🟢 Online' : '🔴 Offline'}</td>
-        <td>${peer.capabilities?.join(', ') || '-'}</td>
+        <td>${peer.p2pCapabilities?.join(', ') || '-'}</td>
         <td>${new Date(peer.lastSeen * 1000).toLocaleString()}</td>
       </tr>
     `;
@@ -558,18 +568,103 @@ export class RelayRoom {
     if (isLocalDeploy) return;
 
     const saveIntervalMs = parseInt(this.env.CACHE_SAVE_INTERVAL || "300") * 1000;
-    await this.state.storage.setAlarm(Date.now() + saveIntervalMs);
+    let wakeAt = Date.now() + saveIntervalMs;
+
+    // A staggered pair must be re-driven the moment its window expires --
+    // coordinateNatHole() only runs on inbound P2PStateInfo, so nothing else
+    // would ever hand out the instruction and the punch would never happen.
+    // Without this the pair silently stalls until the next save alarm (300s
+    // by default), which is what made the staggered run look like a failure.
+    const staggerAt = this.packetHandler._nextStaggerDeadline();
+    if (staggerAt != null && staggerAt < wakeAt) {
+      wakeAt = staggerAt;
+      logger.debug(
+        `[Alarm] Shortened next wake to ${Math.max(0, (staggerAt - Date.now()) / 1000)}s ` +
+        `for pending NAT-hole stagger`
+      );
+    }
+
+    await this.state.storage.setAlarm(wakeAt);
     this.saveAlarmScheduled = true;
-    logger.debug(`[Alarm] Scheduled save in ${saveIntervalMs / 1000}s`);
+    logger.debug(`[Alarm] Scheduled save in ${(wakeAt - Date.now()) / 1000}s`);
   }
 
   async alarm() {
     try {
       await this.saveAppCache();
       await this.setupSaveAlarm();
+      // Periodic NAT hole re-coordination: re-broadcast instructions for
+      // peers that haven't established FullDuplex yet.
+      await this.reBroadcastNatHoleInstructions();
     } catch (e) {
       logger.error("[Alarm] Failed:", e);
       try { await this.setupSaveAlarm(); } catch (_) {}
+    }
+  }
+
+  /**
+   * Re-coordinate and re-broadcast NAT hole instructions for all eligible
+   * peer pairs. This is called periodically by the Alarm to handle cases
+   * where the initial punch attempt failed (e.g., symmetric NAT timing).
+   */
+  async debugNatHoleBackoff() {
+    const ph = this.packetHandler;
+    const map = ph && ph.natHoleBackoff;
+    const now = Date.now();
+    const entries = [];
+    if (map) {
+      for (const [k, v] of map) {
+        entries.push({
+          pair: k,
+          signature: v.signature,
+          backoffMs: v.backoffMs,
+          remainingMs: Math.max(0, v.nextAllowedAt - now),
+        });
+      }
+    }
+    return new Response(JSON.stringify({ now, size: map ? map.size : -1, entries }, null, 2), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  /**
+   * Arm a follow-up alarm at `at` when it is earlier than the wake already
+   * scheduled.
+   *
+   * Needed because a staggered pair has no other way to become eligible: the
+   * decision function only runs on inbound P2PStateInfo, and the regular save
+   * alarm is minutes away. Without this the pair stalls silently and the punch
+   * instruction is never emitted.
+   */
+  async armStaggerWake(at) {
+    if (at == null) return;
+    const now = Date.now();
+    const delay = Math.max(0, at - now);
+    const current = await this.state.storage.getAlarm();
+    if (current != null && current <= at) {
+      return; // an earlier wake is already pending
+    }
+    // Durable Object alarms are single-slot: re-arming replaces the save
+    // alarm, so chain the save alarm back in afterwards.
+    await this.state.storage.setAlarm(at);
+    logger.debug(
+      `[Alarm] Stagger wake armed in ${(delay / 1000).toFixed(1)}s ` +
+      `(was ${current == null ? "none" : ((current - now) / 1000).toFixed(0) + "s"})`
+    );
+  }
+
+  async reBroadcastNatHoleInstructions() {
+    try {
+      const communityNames = this.communityManager.getAllCommunities();
+      for (const name of communityNames) {
+        const commState = await this.communityManager.getCommunity(name);
+        const instructions = this.packetHandler.coordinateNatHole(commState);
+        if (instructions.size > 0) {
+          await this.packetHandler.broadcastNatHoleInstructions(commState, instructions);
+        }
+      }
+    } catch (e) {
+      logger.error("[RelayRoom] reBroadcastNatHoleInstructions error:", e);
     }
   }
 

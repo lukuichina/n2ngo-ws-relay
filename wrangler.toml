@@ -30,6 +30,23 @@ DISABLE_RELAY = "0"
 # 是否允许 P2P 直连（下发 p2pEndpoint）
 ALLOW_P2P = "1"
 
+# NAT 打洞错峰窗口（毫秒）
+# 仅对一对 peer 的「第一轮」生效：按较晚上线者的注册时间推迟下发，
+# 见 src/core/handler.js NAT_PUNCH_STAGGER_MS / _staggerGateFor。
+# 注意两端都是老连接时这个门槛已过期，属于空转，稳态靠下面那个逐轮延迟。
+NAT_PUNCH_STAGGER_MS = "1000"
+
+# NAT 打洞：sender 指令相对 receiver 指令的延迟下发（毫秒）
+# FRP 等价行为，见 src/core/handler.js NAT_SENDER_DISPATCH_DELAY_MS。
+# 每一轮都生效，设为 "0" 关闭该延迟（两端同时下发）。
+NAT_SENDER_DISPATCH_DELAY_MS = "1000"
+
+# 注册后延迟多少毫秒再广播一次 peer 列表（毫秒）
+# 第一次广播只覆盖当时在线的 peer；对端若恰好刚上线会漏掉，
+# 而 Go 侧把 peer 列表当全量快照处理，会顺手删掉列表里没有的 peer
+# （n2n-go pkg/p2p/p2p.go HandlePeerInfoList）。设为 "0" 关闭。
+NAT_PEER_LIST_REANNOUNCE_MS = "2000"
+
 # 白名单 Token（逗号分隔），为空则不限制
 WHITE_TOKEN = ""
 

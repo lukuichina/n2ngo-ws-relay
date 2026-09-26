@@ -41,6 +41,298 @@ import {
 import { encode } from "./protos.js";
 import { decryptRSA_OAEP, importRSAPrivateKey } from "./crypto.js";
 
+// ---------- FRP NAT Hole Coordination ----------
+// Ported from frp/pkg/nathole/classify.go + analysis.go (mode 3: HardNAT & HardNAT).
+// Determines which side sends punch packets and which side listens.
+
+const EasyNAT = "EasyNAT";
+const HardNAT = "HardNAT";
+
+const DetectRoleSender = 0;
+const DetectRoleReceiver = 1;
+
+// ClassifyFeatureCount equivalent of FRP's ClassifyFeatureCount.
+// Counts EasyNAT vs HardNAT features and how many HardNAT features
+// have regular port changes.
+function classifyFeatureCount(features) {
+  let easyCount = 0;
+  let hardCount = 0;
+  let portsChangedRegularCount = 0;
+  for (const f of features) {
+    if (!f) continue;
+    if (f.natType === EasyNAT) { easyCount++; continue; }
+    hardCount++;
+    if (f.regularPortsChange) portsChangedRegularCount++;
+  }
+  console.log(`[classifyFeatureCount] features=${features.map(f => f ? f.natType : 'null').join(',')} easyCount=${easyCount} hardCount=${hardCount} portsChangedRegularCount=${portsChangedRegularCount}`);
+  return { easyCount, hardCount, portsChangedRegularCount };
+}
+
+// Mode 3 (HardNAT & HardNAT, both changes in ports are regular):
+//   sender, portsRangeNumber 10 | receiver, ttl 7, portsRangeNumber 10
+//   sender, portsRangeNumber 10 | receiver, ttl 4, portsRangeNumber 10
+//   sender, portsRangeNumber 10 | receiver, portsRangeNumber 10
+//   receiver, ttl 7, portsRangeNumber 10 | sender, portsRangeNumber 10
+//   receiver, ttl 4, portsRangeNumber 10 | sender, portsRangeNumber 10
+//   receiver, portsRangeNumber 10 | sender, portsRangeNumber 10
+//
+// We use index 0: sender with portsRangeNumber=10, receiver with TTL=7 + portsRangeNumber=10.
+// The sender is the peer whose pub_socket port is lower (deterministic tie-break).
+const mode3Behaviors = [
+  { role: DetectRoleSender, portsRangeNumber: 10 },
+  { role: DetectRoleReceiver, ttl: 7, portsRangeNumber: 10 },
+];
+
+const PORTS_RANGE_NUMBER = 10;
+const DEFAULT_TTL = 7;
+
+// Decide sender/receiver for a pair of NAT peers.
+// Returns { senderMAC, receiverMAC, senderInstruction, receiverInstruction } or null.
+function decideNatHoleRoles(peerA, peerB) {
+  const features = [peerNatFeature(peerA), peerNatFeature(peerB)];
+  const { hardCount, portsChangedRegularCount } = classifyFeatureCount(features);
+
+  // Determine coordination mode:
+  // - Mode 3/4: both HardNAT → port scanning with portsRange
+  // - Mode 5/6: EasyNAT pair → direct P2P, no port scanning needed
+  // - Mixed: EasyNAT + HardNAT → simpler coordination (receiver sends to sender pubSocket)
+  if (hardCount === 1) {
+    // Mixed HardNAT/EasyNAT — not currently handled, skip.
+    return null;
+  }
+
+  // Deterministic tie-break: lower pub_socket port is the sender.
+  //
+  // Both pubSockets must be known before the roles can be decided. parsePort
+  // maps a missing address to 0, so pairing an edge whose STUN result has not
+  // landed yet (pubSocket === "", which happens right after a reconnect and
+  // while P2PStateInfo updates are still arriving) makes that edge the sender
+  // by default — it sorts below every real port. The pair is then marked as
+  // coordinated and burns a backoff slot on an instruction whose sender half
+  // carries no address at all, so both sides punch at nothing. That window is
+  // exactly the one a reconnect opens, which is why a reconnected edge could
+  // sit through several rounds that could never work.
+  if (!peerA.pubSocket || !peerB.pubSocket) {
+    console.log(
+      `[decideNatHoleRoles] defer: pubSocket not settled yet ` +
+      `(A=${peerA.pubSocket || "<empty>"} B=${peerB.pubSocket || "<empty>"})`
+    );
+    return null;
+  }
+  const portA = parsePort(peerA.pubSocket);
+  const portB = parsePort(peerB.pubSocket);
+  const sender = portA <= portB ? peerA : peerB;
+  const receiver = portA <= portB ? peerB : peerA;
+
+  const portsDiff = Math.abs(
+    (peerNatFeature(sender) ? peerNatFeature(sender).portsDifference : 0) -
+    (peerNatFeature(receiver) ? peerNatFeature(receiver).portsDifference : 0)
+  );
+
+  // FRP Mode 0: for EasyNAT-EasyNAT, no port scanning is needed — the
+  // STUN-discovered pubSocket port is exact. The Go handler now responds
+  // with a punch ACK to the sender's source address, enabling
+  // bidirectional connectivity through cloud NATs without UDP port forwarding.
+  // FRP Mode 3: for HardNAT-HardNAT, scan the port range for symmetric NAT.
+  const senderNatType = sender.natType || HardNAT;
+  const receiverNatType = receiver.natType || HardNAT;
+  const bothEasyNAT = senderNatType === EasyNAT && receiverNatType === EasyNAT;
+
+  // The port range must be centred on the port of the peer we are PUNCHING
+  // TO, not on our own port. Each side scans the range of its counterpart:
+  //   - the sender punches at the receiver  -> scan the RECEIVER's port
+  //   - the receiver punches at the sender  -> scan the SENDER's port
+  // Using senderPort for both (the previous behaviour) made the sender scan
+  // its own port, and the receiver scan the sender's port while also
+  // ignoring its own, so neither side ever probed the port it needed.
+  const senderPort = parsePort(sender.pubSocket);
+  const receiverPort = parsePort(receiver.pubSocket);
+
+  let senderPortsRangeFrom, senderPortsRangeTo;
+  let receiverPortsRangeFrom, receiverPortsRangeTo;
+
+  if (bothEasyNAT) {
+    // FRP Mode 0 sends an empty CandidatePorts list: the exact candidate
+    // address is authoritative and no port scan is performed at all.
+    // A zero range disables the Go-side scan loop (it requires port >= 1);
+    // the exact-address send still happens on both sides.
+    senderPortsRangeFrom = 0;
+    senderPortsRangeTo = 0;
+    receiverPortsRangeFrom = 0;
+    receiverPortsRangeTo = 0;
+  } else {
+    // FRP Mode 3: scan around the counterpart's observed port.
+    const lo = receiverPort - portsDiff - PORTS_RANGE_NUMBER;
+    const hi = receiverPort + portsDiff + PORTS_RANGE_NUMBER;
+    senderPortsRangeFrom = Math.max(lo, 1);
+    senderPortsRangeTo = Math.min(hi, 65535);
+
+    const lo2 = senderPort - portsDiff - PORTS_RANGE_NUMBER;
+    const hi2 = senderPort + portsDiff + PORTS_RANGE_NUMBER;
+    receiverPortsRangeFrom = Math.max(lo2, 1);
+    receiverPortsRangeTo = Math.min(hi2, 65535);
+  }
+
+  const senderInstr = {
+    role: DetectRoleSender,
+    portsRangeFrom: senderPortsRangeFrom,
+    portsRangeTo: senderPortsRangeTo,
+    // FRP parity: the sender's detect/punch packet must traverse the full
+    // path, so it must go out with the socket's normal TTL. FRP encodes this
+    // as TTL:0 in DetectBehavior for the sender role (only the receiver uses
+    // ttl 7, and only to open its own NAT mapping -- see mode3Behaviors).
+    //
+    // Giving the sender ttl 7 sets IP_TTL on the shared P2P socket for that
+    // write, so the one packet that actually has to reach the peer dies at the
+    // first router past hop 7: both sides log "punched ... once" (the local
+    // WriteToUDP succeeded) while "Punch packet received" stays 0 forever.
+    ttl: 0,
+    targetMac: strToMacBytes(receiver.macAddr),
+    senderMac: strToMacBytes(sender.macAddr),
+    senderP2pEndpoint: sender.p2pEndpoint || "",
+    senderPubSocket: sender.pubSocket || "",
+    senderNatType: sender.natType || HardNAT,
+    senderBehavior: (peerNatFeature(sender) ? peerNatFeature(sender).behavior : "BehaviorPortChanged") || "BehaviorPortChanged",
+    portsDifference: portsDiff,
+    regularPortsChange: !!(peerNatFeature(sender) && peerNatFeature(sender).regularPortsChange),
+  };
+
+  const receiverInstr = {
+    role: DetectRoleReceiver,
+    portsRangeFrom: receiverPortsRangeFrom,
+    portsRangeTo: receiverPortsRangeTo,
+    ttl: bothEasyNAT ? 7 : DEFAULT_TTL,
+    targetMac: strToMacBytes(sender.macAddr),
+    senderMac: strToMacBytes(sender.macAddr),
+    senderP2pEndpoint: sender.p2pEndpoint || "",
+    senderPubSocket: sender.pubSocket || "",
+    senderNatType: sender.natType || HardNAT,
+    senderBehavior: (peerNatFeature(sender) ? peerNatFeature(sender).behavior : "BehaviorPortChanged") || "BehaviorPortChanged",
+    portsDifference: portsDiff,
+    regularPortsChange: !!(peerNatFeature(sender) && peerNatFeature(sender).regularPortsChange),
+  };
+
+  return {
+    senderMAC: sender.macAddr,
+    receiverMAC: receiver.macAddr,
+    senderInstruction: senderInstr,
+    receiverInstruction: receiverInstr,
+  };
+}
+
+function parsePort(pubSocket) {
+  if (!pubSocket) return 0;
+  const idx = pubSocket.lastIndexOf(":");
+  if (idx < 0) return 0;
+  return parseInt(pubSocket.substring(idx + 1)) || 0;
+}
+
+function strToMacBytes(macStr) {
+  const parts = macStr.split(":").map(x => parseInt(x, 16));
+  return new Uint8Array(parts);
+}
+
+// Build a NatFeature from the P2P state info stored on the relay.
+// The relay stores p2pInfos per peer (from P2PStateInfo messages),
+// but NAT classification data (natType, behavior, portsDifference,
+// regularPortsChange) is carried in the RegisterRequest / PeerInfo nat_type field.
+// We reconstruct a minimal NatFeature from the peer's stored natType.
+function peerNatFeature(peer) {
+  if (!peer) return null;
+  // For EasyNAT (port-preserving cone NAT), STUN confirmed the
+  // public port equals the local P2P socket port.
+  if (peer.natType === EasyNAT) {
+    return {
+      natType: EasyNAT,
+      behavior: "BehaviorNoChange",
+      portsDifference: 0,
+      regularPortsChange: false,
+      publicNetwork: false,
+    };
+  }
+  // For HardNAT or unknown, use conservative defaults.
+  return {
+    natType: peer.natType || "unknown",
+    behavior: "BehaviorPortChanged",
+    portsDifference: 0,
+    regularPortsChange: false,
+    publicNetwork: false,
+  };
+}
+
+// Check if a peer is eligible for NAT hole coordination:
+//   - online
+//   - P2P state is Available (learned from P2PStateInfo)
+//   - NAT type is HardNAT or EasyNAT
+//   Both types require coordination: HardNAT needs port scanning,
+//   EasyNAT needs pubSocket discovery for direct P2P.
+function isCoordEligible(peer, p2pInfos) {
+  if (!peer || !peer.online) return false;
+  if (peer.natType !== HardNAT && peer.natType !== EasyNAT) return false;
+  // P2P reachability is tracked in p2pInfos map (set by handleP2PStateInfo).
+  // A peer is "Available" if it has sent P2PStateInfo and has P2P endpoint.
+  const info = p2pInfos ? p2pInfos.get(peer.macAddr) : null;
+  if (!info) return false;
+  if (!peer.p2pEndpoint) return false;
+  return true;
+}
+
+// Coordinate NAT hole punching for all eligible pairs in the community.
+// Returns a Map<macAddr, NatHoleInstruction> of instructions to embed
+// in the next PeerInfoList broadcast.
+// Moved coordinateNatHole to PacketHandler class as a method.
+
+// How long the newer peer of a pair must have been registered before the first
+// punch instruction is handed out.
+//
+// NAT mappings need time to solidify. When both edges register at the same
+// moment the relay pushes both instructions simultaneously, each side punches
+// before the other's mapping exists, and the packets are dropped -- exactly
+// what was observed (6 rounds x 5 attempts, all lost, backoff escalated to its
+// 5-minute cap). Staggering by a few seconds lets the newcomer's mapping form
+// first.
+//
+// Measured: with the edges started 9s apart the punch succeeded on the first
+// attempt, FullDuplex 1s after the instruction, zero failures.
+//
+// Module-level (not per-instance) because it is read by methods; the value is
+// overridden from this.env in the constructor.
+let NAT_PUNCH_STAGGER_MS = 8000;
+
+// How long the SENDER's instruction is held back after the RECEIVER's.
+//
+// FRP parity: pkg/nathole/controller.go:229-240 — frps sends the visitor's
+// and the client's NatHoleResp concurrently, but when the recipient's role is
+// "sender" it sleeps 1s first:
+//
+//   g.Go(func() error {
+//     if vResp.DetectBehavior.Role == "sender" { time.Sleep(1 * time.Second) }
+//     _ = session.visitorTransporter.Send(vResp)
+//   })
+//
+// The rationale in FRP's own comment is "make sure the client has send the
+// detect messages". The receiver's low-TTL probe opens its NAT mapping as
+// soon as it acts; giving the sender a one-second head start guarantees that
+// mapping exists before the sender's first packet leaves, so the receiver's
+// NAT does not drop it.
+//
+// This is NOT the same mechanism as NAT_PUNCH_STAGGER_MS (see
+// _staggerGateFor): the stagger delays a pair's FIRST round, keyed on the
+// newer peer's registration time, and is a no-op for two long-lived edges
+// (registeredAt is in the past → readyAt <= now). This delay is per-role and
+// applies to every round, which is the case that was actually failing: both
+// edges online for hours, stagger gate inert, both punch simultaneously into
+// mappings that may not exist for the destination address yet.
+//
+// 0 disables the delay (both instructions go out together).
+let NAT_SENDER_DISPATCH_DELAY_MS = 1000;
+
+// Delay before re-broadcasting a registration to the peers that are online by
+// then. broadcastPeerInfo only reaches whoever is online at the instant it
+// runs, so a peer that finished connecting a moment too late never hears
+// about the newcomer. Set to "0" to disable the second pass.
+let NAT_PEER_LIST_REANNOUNCE_MS = 2000;
+
 export class PacketHandler {
   constructor(env, relayRoom) {
     this.env = env;
@@ -49,6 +341,137 @@ export class PacketHandler {
     this.snPrivateKey = null; // Supernode RSA 私钥
     this.snPublicKeyDER = null; // Supernode 公钥 DER
     this.snPublicKeyCryptoKey = null; // Supernode 公钥 CryptoKey（用于导出 PEM）
+
+
+
+// NAT hole punch broadcast backoff.
+    //
+    // coordinateNatHole() runs on every inbound P2PStateInfo, and each edge
+    // emits those every few seconds. It used to re-derive and re-broadcast
+    // instructions for every eligible pair unconditionally, so a pair whose
+    // punch could never succeed produced an endless broadcast/punch/retry
+    // loop (observed: >15k NatHoleInstruction broadcasts with no progress).
+    //
+    // Key: "<macA>|<macB>" (sorted, so the pair is order-independent).
+    // Value: { nextAllowedAt, backoffMs, signature }
+    //
+    // The signature folds in both pubSockets and the decided roles: when an
+    // edge's STUN-discovered port changes, or the roles flip, the situation
+    // is genuinely new and we retry immediately instead of waiting out a
+    // stale backoff.
+    this.natHoleBackoff = new Map();
+
+    // Latest hole-punch outcome per pair, keyed by "<macA>|<macB>" (sorted).
+    // Written by recordPunchResult() from the punchResult field of
+    // P2PStateInfo, read by coordinateNatHole().
+    //
+    // This is the feedback loop that was missing: the relay previously had no
+    // way to learn a punch had succeeded, so it kept re-broadcasting for pairs
+    // that were already up, and had no signal to prioritise a retry after a
+    // failure.
+    this.natHolePunchState = new Map();
+
+    // Consecutive failed rounds per pair, so the re-arm backoff escalates
+    // instead of hammering at a fixed interval.
+    this._failCounts = new Map();
+
+    // Stagger window, configurable per environment (wrangler dev vars / vars
+    // in wrangler.toml). Falls back to the module default when unset.
+    const configured = this.env && this.env.NAT_PUNCH_STAGGER_MS;
+    if (configured != null && configured !== "") {
+      const parsed = parseInt(configured, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        NAT_PUNCH_STAGGER_MS = parsed;
+      }
+    }
+
+    // Per-role dispatch delay for the sender's instruction (FRP frps parity).
+    const senderDelay = this.env && this.env.NAT_SENDER_DISPATCH_DELAY_MS;
+    if (senderDelay != null && senderDelay !== "") {
+      const parsed = parseInt(senderDelay, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        NAT_SENDER_DISPATCH_DELAY_MS = parsed;
+      }
+    }
+
+    // Second registration broadcast pass (see NAT_PEER_LIST_REANNOUNCE_MS).
+    const reanounce = this.env && this.env.NAT_PEER_LIST_REANNOUNCE_MS;
+    if (reanounce != null && reanounce !== "") {
+      const parsed = parseInt(reanounce, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        NAT_PEER_LIST_REANNOUNCE_MS = parsed;
+      }
+    }
+  }
+
+  /**
+   * Record a punch outcome reported by reporterMAC about peerMAC.
+   *
+   * Both ends of a pair punch, so either may report; the newest report wins.
+   * A success also clears the backoff, otherwise the pair would stay
+   * suppressed even after it came up.
+   */
+  /**
+   * Consecutive failed rounds for a pair, used to escalate the re-arm backoff.
+   * A success resets it to 0.
+   */
+  _failStreak(pairKey) {
+    const reported = this.natHolePunchState.get(pairKey);
+    if (!reported) return 0;
+    if (reported.state !== 2) return 0;
+    // Derive the streak from how long the pair has been reporting failure
+    // rather than keeping a separate counter that can drift out of sync.
+    const prior = this._failCounts.get(pairKey) || 0;
+    return prior;
+  }
+
+  /**
+   * Drop all per-pair NAT-hole state involving `macAddr`.
+   *
+   * Called when a peer disconnects or reconnects. Without this, a pair that
+   * had already punched successfully keeps a "PunchStateSucceeded" report and
+   * a multi-minute backoff entry, so coordinateNatHole() skips it and the
+   * reconnected edge waits out the remaining backoff (observed: ~5 minutes of
+   * silence after a restart, which looks exactly like a broken punch).
+   *
+   * A reconnect changes the NAT mapping and the STUN-derived addresses, so
+   * every cached decision about the pair is stale by definition.
+   */
+  clearPairStateFor(macAddr) {
+    if (!macAddr) return;
+    const needle = String(macAddr).toLowerCase();
+    const isInKey = (key) =>
+      String(key).split("|").some((m) => String(m).toLowerCase() === needle);
+    for (const key of this.natHoleBackoff.keys()) {
+      if (isInKey(key)) this.natHoleBackoff.delete(key);
+    }
+    for (const key of this.natHolePunchState.keys()) {
+      if (isInKey(key)) this.natHolePunchState.delete(key);
+    }
+    for (const key of this._failCounts.keys()) {
+      if (isInKey(key)) this._failCounts.delete(key);
+    }
+  }
+
+  recordPunchResult(reporterMAC, peerMAC, result) {
+    if (!reporterMAC || !peerMAC || !result) return;
+    const key = [reporterMAC, peerMAC].sort().join("|");
+    const state = typeof result.state === "number" ? result.state : 0;
+    if (state === 0) return; // PunchStateNone carries no information
+    this.natHolePunchState.set(key, {
+      state,
+      attempts: result.attempts || 0,
+      detail: result.detail || "",
+      at: Date.now(),
+    });
+    if (state === 3) {
+      // Tunnel is up: drop every piece of per-pair retry state so a later
+      // drop starts from a clean slate rather than the escalated backoff.
+      this.natHoleBackoff.delete(key);
+      this._failCounts.delete(key);
+    } else if (state === 2) {
+      this._failCounts.set(key, (this._failCounts.get(key) || 0) + 1);
+    }
   }
 
   /**
@@ -110,6 +533,275 @@ export class PacketHandler {
    */
   getSNPublicKeyDER() {
     return this.snPublicKeyDER;
+  }
+
+  /**
+   * Coordinate NAT hole punching for all eligible pairs in the community.
+   * Returns a Map<macAddr, NatHoleInstruction> of instructions to embed
+   * in the next PeerInfoList broadcast.
+   */
+  /**
+   * Earliest pending stagger deadline across all pairs, or null if none.
+   *
+   * coordinateNatHole() only runs when a P2PStateInfo arrives. A staggered
+   * pair therefore has no way to become eligible again on its own: once the
+   * window is reached nothing re-invokes the decision, and the instruction is
+   * never sent. The alarm uses this to schedule the follow-up call.
+   */
+  _nextStaggerDeadline() {
+    let earliest = null;
+    const now = Date.now();
+    for (const [pairKey, entry] of this.natHoleBackoff) {
+      if (!entry || !entry.staggered) continue;
+      if (entry.nextAllowedAt <= now) return now; // already due, re-drive now
+      if (earliest === null || entry.nextAllowedAt < earliest) {
+        earliest = entry.nextAllowedAt;
+      }
+    }
+    return earliest;
+  }
+
+  /**
+   * Earliest time a pair may be given its first punch instruction.
+   *
+   * Returns `now` when no staggering is needed. The gate is the newer peer's
+   * `registeredAt`: the pair waits until that peer has been online for
+   * NAT_PUNCH_STAGGER_MS, so its STUN binding and NAT mapping exist before
+   * anyone punches.
+   *
+   * Returns null when the pair has already attempted once, in which case the
+   * caller falls back to the normal backoff path -- staggering must not
+   * penalise retries after a real failure.
+   */
+  _staggerGateFor(pairKey, peerA, peerB, now) {
+    // Only stagger a pair's first round.
+    if (this.natHoleBackoff.has(pairKey) || this.natHolePunchState.has(pairKey)) {
+      return now;
+    }
+
+    const registeredAtOf = (peer) => {
+      if (!peer) return null;
+      // registeredAt is milliseconds since epoch (set in addPeer). Older
+      // snapshots may hold seconds; normalise defensively.
+      const v = peer.registeredAt;
+      if (!v || typeof v !== "number") return null;
+      return v < 1e12 ? v * 1000 : v;
+    };
+
+    const a = registeredAtOf(peerA);
+    const b = registeredAtOf(peerB);
+    if (a == null || b == null) return now; // cannot tell, do not delay
+
+    // The newer of the two is the one that needs settling time.
+    const newestRegistered = Math.max(a, b);
+    const readyAt = newestRegistered + NAT_PUNCH_STAGGER_MS;
+    return now < readyAt ? readyAt : now;
+  }
+
+  coordinateNatHole(commState) {
+    // Defensive: Durable Object instances can be re-created (eviction /
+    // hibernate-thaw), which would drop the backoff map and re-open the loop.
+    if (!this.natHoleBackoff) this.natHoleBackoff = new Map();
+    const instructions = new Map();
+    const onlinePeers = commState.getOnlinePeers();
+    const eligible = [];
+
+    for (const p of onlinePeers) {
+      if (isCoordEligible(p, commState.p2pInfos)) {
+        eligible.push(p);
+      }
+    }
+
+    console.log(`[coordinateNatHole] onlinePeers=${onlinePeers.length} eligible=${eligible.length}`);
+    for (const p of eligible) {
+      console.log(`[coordinateNatHole] eligible mac=${p.macAddr} natType=${p.natType} p2pEndpoint=${p.p2pEndpoint} pubSocket=${p.pubSocket}`);
+    }
+
+    // Pair up eligible peers and decide roles.
+    const paired = new Set();
+    for (let i = 0; i < eligible.length; i++) {
+      if (paired.has(eligible[i].macAddr)) continue;
+      for (let j = i + 1; j < eligible.length; j++) {
+        if (paired.has(eligible[j].macAddr)) continue;
+        const result = decideNatHoleRoles(eligible[i], eligible[j]);
+        if (!result) continue;
+
+        // Backoff gate.
+        //
+        // coordinateNatHole() is invoked on every inbound P2PStateInfo (each
+        // edge emits one every few seconds) and used to re-broadcast the same
+        // pair unconditionally, so a pair that cannot punch loops forever
+        // (observed: >15k broadcasts, and 152/60s even after a first attempt).
+        //
+        // The gate keys on the pair's identity and a STABLE signature. An
+        // earlier version folded pubSocket into the signature to retry
+        // immediately on a NAT port change, but pubSocket flaps between empty
+        // and set as P2PStateInfo updates land, so the signature changed on
+        // nearly every call and the backoff was bypassed entirely.
+        //
+        // Instead: pubSocket is deliberately excluded, and a pair is retried
+        // early only when it previously SUCCEEDED (P2PStatus shows the tunnel
+        // is up). Genuine NAT port changes are picked up by the 5-minute cap.
+        const pairKey = [result.senderMAC, result.receiverMAC].sort().join("|");
+        const signature = result.senderMAC + "->" + result.receiverMAC;
+        const now = Date.now();
+
+        // A pair that already has a live tunnel must be re-coordinated
+        // promptly (e.g. after the other side's NAT port changes), so clear
+        // its backoff. p2pStatus is only present on newer P2PStateInfo
+        // payloads, so read it defensively rather than importing an enum that
+        // the relay side never sets.
+        const statusOf = (mac) => {
+          const info = commState.p2pInfos && commState.p2pInfos.get(mac);
+          return info ? info.p2pStatus : undefined;
+        };
+
+        // === A "succeeded" report only describes the tunnel it was made for ===
+        //
+        // The success gate below suppresses a pair indefinitely, which is
+        // correct while the tunnel it refers to is actually up. But the
+        // report is never retired: natHolePunchState survives until a peer
+        // disconnects, and neither a keepalive demotion nor a NAT mapping
+        // expiring clears it. Both sides demote to the relay, the relay still
+        // believes the pair punched successfully, and no instruction is ever
+        // emitted again — the pair is stuck on the relay with no path back,
+        // which is what a failed punch after a restart looks like from the
+        // outside.
+        //
+        // So the success report is retired as soon as the tunnel it described
+        // is gone: if either side is currently reporting something other than
+        // full duplex, the pair is no longer up and coordination resumes. A
+        // demotion is reported through P2PStateInfo, so this converges on the
+        // same signal the success was derived from.
+        const senderStatus = statusOf(result.senderMAC);
+        const receiverStatus = statusOf(result.receiverMAC);
+        const priorReport = this.natHolePunchState.get(pairKey);
+        if (
+          priorReport &&
+          priorReport.state === 3 &&
+          senderStatus !== 3 &&
+          receiverStatus !== 3
+        ) {
+          this.natHolePunchState.delete(pairKey);
+          this._failCounts.delete(pairKey);
+          this.natHoleBackoff.delete(pairKey);
+          console.log(
+            `[coordinateNatHole] pair ${pairKey} retired a stale success ` +
+            `(senderStatus=${senderStatus} receiverStatus=${receiverStatus}) — re-coordinating`
+          );
+        }
+
+        if (senderStatus === 3 || receiverStatus === 3) {
+          // 3 == full duplex: tunnel is up, no need to hold it back.
+          this.natHoleBackoff.delete(pairKey);
+        }
+
+        // === Stagger gate (first round only) ===
+        //
+        // Hold the pair until the newer peer has been registered long enough
+        // for its NAT mapping to exist. Without this, edges that register at
+        // the same instant punch each other before either mapping is up and
+        // the whole round is lost.
+        // An expired stagger marker must be cleared before the decision
+        // below, otherwise the pair keeps re-arming itself forever and the
+        // instruction is never actually emitted.
+        const priorEntry = this.natHoleBackoff.get(pairKey);
+        if (priorEntry && priorEntry.staggered && priorEntry.nextAllowedAt <= now) {
+          this.natHoleBackoff.delete(pairKey);
+        }
+
+        const readyAt = this._staggerGateFor(
+          pairKey,
+          eligible[i],
+          eligible[j],
+          now
+        );
+        if (readyAt > now) {
+          this.natHoleBackoff.set(pairKey, {
+            nextAllowedAt: readyAt,
+            backoffMs: readyAt - now,
+            signature,
+            staggered: true,
+          });
+          console.log(
+            `[coordinateNatHole] pair ${pairKey} staggered ` +
+            `${Math.ceil((readyAt - now) / 1000)}s (newest peer needs its NAT mapping)`
+          );
+          // Arm a wake for when the window expires. coordinateNatHole() is
+          // only invoked on inbound P2PStateInfo, so without this the pair
+          // would never be re-decided and the instruction never sent.
+          if (this.relayRoom && typeof this.relayRoom.armStaggerWake === "function") {
+            this.relayRoom.armStaggerWake(readyAt).catch((e) =>
+              console.error("[coordinateNatHole] armStaggerWake failed:", e)
+            );
+          }
+          continue;
+        }
+
+        // === Feedback-driven coordination ===
+        //
+        // The edges now report each punch round's outcome, so the relay no
+        // longer has to guess. Previously it broadcast on a fixed timer and
+        // only a blunt backoff kept that from becoming a storm.
+        const reported = this.natHolePunchState.get(pairKey);
+
+        // 3 == PunchStateSucceeded: the tunnel is up. Stop broadcasting for
+        // this pair entirely until an edge reports otherwise.
+        if (reported && reported.state === 3) {
+          continue;
+        }
+
+        // 2 == PunchStateFailed: the round just burned out. Re-arm now rather
+        // than waiting out the accumulated backoff, but keep the escalating
+        // schedule so a pair that can never punch degrades to the 5-minute
+        // cap instead of spinning.
+        if (reported && reported.state === 2) {
+          const attempts = this.natHolePunchState.get(pairKey).attempts || 0;
+          const backoffMs = Math.min(
+            Math.max(15000, attempts * 1000) * Math.pow(2, this._failStreak(pairKey)),
+            300000
+          );
+          this.natHoleBackoff.set(pairKey, {
+            nextAllowedAt: now + backoffMs,
+            backoffMs,
+            signature,
+          });
+          console.log(
+            `[coordinateNatHole] pair ${pairKey} re-armed after failure ` +
+            `(attempts=${attempts}, backoff=${backoffMs}ms)`
+          );
+        }
+
+        const prev = this.natHoleBackoff.get(pairKey);
+        if (prev && prev.signature === signature && now < prev.nextAllowedAt) {
+          // SUPPRESSED: within backoff window (this is the path that stops
+          // the broadcast storm).
+          continue; // still cooling down
+        }
+
+        // First attempt after a reset: 15s (matches the edge's own
+        // 5-attempt punch window). Each further failure doubles it, capped
+        // at 5 minutes so a pair whose NAT mapping has since changed still
+        // gets retried.
+        const backoffMs = prev && prev.signature === signature
+          ? Math.min(prev.backoffMs * 2, 300000)
+          : 15000;
+        this.natHoleBackoff.set(pairKey, {
+          nextAllowedAt: now + backoffMs,
+          backoffMs,
+          signature,
+        });
+
+        instructions.set(result.senderMAC, result.senderInstruction);
+        instructions.set(result.receiverMAC, result.receiverInstruction);
+        paired.add(result.senderMAC);
+        paired.add(result.receiverMAC);
+        console.log(`[coordinateNatHole] pair ${pairKey} scheduled (roles ${signature}), backoff=${backoffMs}ms`);
+        break; // each peer gets at most one instruction
+      }
+    }
+
+    return instructions;
   }
 
   /**
@@ -203,7 +895,7 @@ export class PacketHandler {
 
       case PacketType.Ping:
       case PacketType.Pong:
-        await this.handlePing(ws, commState, header, payload);
+        await this.handlePing(ws, commState, header, payload, rawBuf);
         break;
 
       case PacketType.Heartbeat:
@@ -313,6 +1005,14 @@ export class PacketHandler {
       }
     }
 
+    // A (re)connecting edge has a fresh NAT mapping and fresh STUN-derived
+    // addresses, so every cached punch decision for its pairs is stale.
+    // Clearing here is what makes a reconnect re-coordinate on the very next
+    // coordinateNatHole() pass rather than sitting out a backoff window that
+    // was computed for a session that no longer exists (observed as ~5
+    // minutes of silence after a restart).
+    this.clearPairStateFor(req.edgeMACAddr);
+
     // 注册 Peer
     const { virtualIP, isNew, peerInfo } = await commState.registerPeer({
       macAddr: req.edgeMACAddr,
@@ -320,6 +1020,7 @@ export class PacketHandler {
       p2pEndpoint: req.p2pEndpoint,
       p2pCapabilities: req.p2pCapabilities,
       pubSocket: req.pubSocket || "",
+      natType: req.natType || "unknown",
       encryptedMachineID: machineID,
     });
 
@@ -353,32 +1054,100 @@ export class PacketHandler {
       payload: respPayload,
     });
 
-    // 广播新 Peer 加入通知 (TypeRegister)
-    if (isNew) {
-      await this.broadcastPeerInfo(commState, peerInfo, PeerInfoEvent.TypeRegister);
+    // 广播 Peer 加入/回归通知 (TypeRegister)
+    //
+    // NOT gated on isNew. A reconnecting peer must also be announced, or the
+    // peers that are still connected keep whatever (possibly empty, or
+    // stale) list they last received. Worse, the Go edge treats a peer list
+    // as a full snapshot and removes every peer missing from it
+    // (pkg/p2p/p2p.go HandlePeerInfoList), so one truncated list erases a
+    // peer permanently from the other side.
+    //
+    // The peer that just registered is excluded inside broadcastPeerInfo.
+    await this.broadcastPeerInfo(commState, peerInfo, PeerInfoEvent.TypeRegister);
+
+    // Re-broadcast shortly after registration.
+    //
+    // broadcastPeerInfo delivers to getOnlinePeers() *at that moment*. If the
+    // other edge's WebSocket dropped (or it had not finished registering yet)
+    // it is not in that set and the notification is silently dropped — only
+    // a console.log records it. A second pass a moment later catches the peer
+    // that has just come up, which is exactly the ordering that produced
+    // "peer lookup failed for <mac>" on one side while the other side saw the
+    // pair fine.
+    if (NAT_PEER_LIST_REANNOUNCE_MS > 0) {
+      const delayMs = NAT_PEER_LIST_REANNOUNCE_MS;
+      const reannounce = new Promise((resolve) => setTimeout(resolve, delayMs)).then(
+        async () => {
+          try {
+            const online = commState.getOnlinePeers();
+            if (online.length > 0) {
+              await this.broadcastPeerInfo(commState, peerInfo, PeerInfoEvent.TypeRegister);
+              console.log(
+                `[PacketHandler] re-announced ${req.edgeMACAddr} after ${delayMs}ms to ${online.length} online peer(s)`
+              );
+            }
+          } catch (e) {
+            console.error(`[PacketHandler] re-announce of ${req.edgeMACAddr} failed:`, e);
+          }
+        }
+      );
+      // Keep the DO alive for the delay. this.state is the Durable Object
+      // state; PacketHandler itself has no ctx, so reach waitUntil via the
+      // room. If it is unavailable for any reason, the timer still fires —
+      // it just may not keep the isolate alive across the delay.
+      const state = this.relayRoom && this.relayRoom.state;
+      if (state && typeof state.waitUntil === "function") {
+        state.waitUntil(reannounce);
+      } else {
+        reannounce.catch(() => {});
+      }
     }
 
-    console.log(`[PacketHandler] ${req.edgeMACAddr} registered with virtual IP ${numberToIp(virtualIP)}`);
+    console.log(`[PacketHandler] ${req.edgeMACAddr} registered (isNew=${isNew}) with virtual IP ${numberToIp(virtualIP)}`);
   }
 
   /**
    * 处理心跳
    */
-  async handlePing(ws, commState, header, payload) {
+  async handlePing(ws, commState, header, payload, rawBuf) {
     // 更新 Peer 最后见到时间
     const connInfo = this.relayRoom.connections.get(ws);
+    const srcMAC = formatMAC(header.srcMAC);
     if (connInfo) {
       commState.updatePeer(connInfo.macAddr, { lastSeen: Math.floor(Date.now() / 1000) });
     }
 
-    // 回复 Pong，透传原始 Ping 的 payload（含 CheckId），而非发空包
-    await this.sendPacket(ws, {
-      packetType: PacketType.Pong,
-      communityId: header.communityId,
-      srcMAC: header.dstMAC,
-      dstMAC: header.srcMAC,
-      payload: payload || new Uint8Array(0),
-    });
+    const dstMAC = formatMAC(header.dstMAC);
+
+    // PING/PONG 目标为具体 Peer（非 supernode 00:00...） → 转发给目标 Peer
+    if (dstMAC !== "00:00:00:00:00:00" && dstMAC !== srcMAC) {
+      const targetPeer = commState.getPeer(dstMAC);
+      if (targetPeer && targetPeer.online && targetPeer.ws) {
+        try {
+          // 标记 FromSuperNode 标志，透传原始缓冲区
+          let snBuf = rawBuf;
+          if (rawBuf && rawBuf.length > 0 && rawBuf[0] === VERSION) {
+            snBuf = flagPacketFromSupernode(rawBuf);
+          }
+          await targetPeer.ws.send(snBuf);
+          console.log(`[PacketHandler] Forwarded PING/PONG to ${dstMAC} (FlagFromSuperNode set)`);
+        } catch (e) {
+          console.error(`[PacketHandler] Failed to forward PING/PONG to ${dstMAC}: ${e.message}`);
+        }
+      } else {
+        console.log(`[PacketHandler] PING/PONG target ${dstMAC} not online, dropping`);
+      }
+    } else if (dstMAC === "00:00:00:00:00:00") {
+      // PING 发往 supernode 自身 — 回复 Pong 保持连接活跃
+      await this.sendPacket(ws, {
+        packetType: PacketType.Pong,
+        communityId: header.communityId,
+        srcMAC: header.dstMAC,
+        dstMAC: header.srcMAC,
+        payload: payload || new Uint8Array(0),
+      });
+    }
   }
 
   /**
@@ -481,11 +1250,130 @@ export class PacketHandler {
     }
 
     commState.setP2PInfosFor(connInfo.macAddr, p2pInfos);
+    // Update the peer's pubSocket from the P2PStateInfo if present.
+    // This is necessary because encodeRegisterRequest may not include
+    // the pubSocket (it's computed after STUN discovery which happens
+    // at runtime, not registration time).
+    if (p2pInfos.from && p2pInfos.from.pubSocket) {
+      commState.updatePeer(connInfo.macAddr, { pubSocket: p2pInfos.from.pubSocket });
+    }
+    // Refresh p2pEndpoint alongside pubSocket. It used to be written only at
+    // registration time, so an edge that reconnected WITHOUT re-registering
+    // kept advertising the endpoint (and therefore the UDP port) it had before
+    // the restart. coordinateNatHole then put that dead port into
+    // senderP2pEndpoint and the peer punched at it for a full backoff cycle.
+    if (p2pInfos.from && p2pInfos.from.p2pEndpoint) {
+      commState.updatePeer(connInfo.macAddr, { p2pEndpoint: p2pInfos.from.p2pEndpoint });
+    }
+    // Record the observed source addresses this peer reports for others.
+    // A pubSocket is only a STUN snapshot valid for the STUN server's
+    // destination; observedRaddr is where packets actually arrive from,
+    // so relaying it lets peers punch to a reachable address.
+    if (p2pInfos.from && p2pInfos.from.observedRaddr) {
+      commState.updatePeer(connInfo.macAddr, { observedRaddr: p2pInfos.from.observedRaddr });
+    }
+    if (Array.isArray(p2pInfos.to)) {
+      for (const t of p2pInfos.to) {
+        // Hole-punch outcome reported by this edge about a peer. Store it so
+        // coordinateNatHole can (a) stop broadcasting once a pair is up and
+        // (b) re-arm immediately after a failure. Without this feedback the
+        // relay is blind: it can neither confirm success nor prioritise a
+        // retry, and just keeps pushing instructions forever.
+        if (t && t.punchResult && t.punchResultPeerMac) {
+          this.recordPunchResult(connInfo.macAddr, t.punchResultPeerMac, t.punchResult);
+        }
+        if (t && t.observedRaddr && t.macAddr) {
+          commState.updatePeer(t.macAddr, { observedRaddr: t.observedRaddr });
+        }
+      }
+    }
     commState.updatePeer(connInfo.macAddr, {
       lastSeen: Math.floor(Date.now() / 1000),
     });
 
     console.log(`[PacketHandler] P2PStateInfo: from=${connInfo.macAddr} to=${p2pInfos.to ? p2pInfos.to.length : 0} payloadLen=${payload ? payload.length : 0}`);
+
+    // After updating P2P reachability, attempt NAT hole coordination
+    // for HardNAT peers that have become Available.
+    try {
+      const instructions = this.coordinateNatHole(commState);
+      if (instructions.size > 0) {
+        await this.broadcastNatHoleInstructions(commState, instructions);
+      }
+    } catch (e) {
+      console.error("[PacketHandler] coordinateNatHole error:", e);
+    }
+  }
+
+  /**
+   * Broadcast PeerInfoList with embedded NatHoleInstruction to the community.
+   * Each eligible peer receives its own instruction in the peer_infos entry.
+   *
+   * The two roles are dispatched separately: receivers go out immediately,
+   * senders NAT_SENDER_DISPATCH_DELAY_MS later. This mirrors frps, which
+   * holds back a sender's NatHoleResp by 1s (pkg/nathole/controller.go:229-240)
+   * so the receiver's NAT mapping is already open when the sender's first
+   * punch leaves. See NAT_SENDER_DISPATCH_DELAY_MS for the full rationale.
+   *
+   * Splitting the broadcast is safe: each edge only ever acts on the
+   * instruction addressed to its own MAC (handleNatHoleInstruction in
+   * pkg/edge/handlers_missing.go keys on ourMAC and ignores everything else),
+   * so neither side needs to see the other's copy.
+   */
+  async broadcastNatHoleInstructions(commState, instructions) {
+    const receivers = new Map();
+    const senders = new Map();
+    for (const [mac, instr] of instructions) {
+      (instr.role === DetectRoleSender ? senders : receivers).set(mac, instr);
+    }
+
+    let sent = await this.sendNatHoleInstructionBatch(commState, receivers);
+
+    if (senders.size > 0) {
+      if (NAT_SENDER_DISPATCH_DELAY_MS <= 0) {
+        sent += await this.sendNatHoleInstructionBatch(commState, senders);
+      } else {
+        const delayMs = NAT_SENDER_DISPATCH_DELAY_MS;
+        // Awaited rather than setTimeout'd: a Durable Object may be evicted
+        // between the handler returning and a timer firing, and a dropped
+        // sender instruction costs a whole punch round (~15s of backoff).
+        await new Promise((r) => setTimeout(r, delayMs));
+        sent += await this.sendNatHoleInstructionBatch(commState, senders);
+        console.log(
+          `[PacketHandler] broadcastNatHoleInstructions: sender instruction held back ${delayMs}ms (FRP frps parity)`
+        );
+      }
+    }
+
+    console.log(`[PacketHandler] broadcastNatHoleInstructions: ${sent} peer(s) notified in community ${commState.community} (${receivers.size} receiver now, ${senders.size} sender delayed)`);
+  }
+
+  /**
+   * Send one PeerInfoList carrying exactly the given per-peer instructions.
+   */
+  async sendNatHoleInstructionBatch(commState, instructions) {
+    if (instructions.size === 0) return 0;
+    const list = commState.buildPeerInfoList("", PeerInfoEvent.TypeList, instructions);
+    const payload = encodePeerInfoList(list);
+
+    const onlinePeers = commState.getOnlinePeers();
+    let sent = 0;
+    for (const p of onlinePeers) {
+      if (!p.ws || p.ws.readyState !== WebSocket.OPEN) continue;
+      // Only send to peers that have an instruction, plus the sender/receiver
+      // so they can discover each other's instruction.
+      const instr = instructions.get(p.macAddr);
+      if (!instr) continue;
+      await this.sendPacket(p.ws, {
+        packetType: PacketType.PeerInfo,
+        communityId: hashCommunity(commState.community),
+        srcMAC: parseMAC("00:00:00:00:00:00"),
+        dstMAC: new Uint8Array(6),
+        payload,
+      });
+      sent++;
+    }
+    return sent;
   }
 
   /**
@@ -603,6 +1491,7 @@ export class PacketHandler {
     if (!connInfo) return;
 
     await commState.unregisterPeer(connInfo.macAddr);
+    this.clearPairStateFor(connInfo.macAddr);
     this.relayRoom.connections.delete(ws);
 
     // 广播 Peer 下线通知
@@ -764,17 +1653,25 @@ export class PacketHandler {
     const payload = encodePeerInfoList(list);
 
     const onlinePeers = commState.getOnlinePeers();
+    console.log(`[broadcastPeerInfo] eventType=${eventType} registeringMac=${peerInfo.macAddr} onlinePeers=${onlinePeers.length} peerList=${JSON.stringify(onlinePeers.map(p => ({mac: p.macAddr, wsOpen: p.ws && p.ws.readyState === WebSocket.OPEN})))}`);
     for (const p of onlinePeers) {
-      if (p.macAddr === peerInfo.macAddr) continue; // 不发给自己
-      if (!p.ws || p.ws.readyState !== WebSocket.OPEN) continue;
+      if (p.macAddr === peerInfo.macAddr) {
+        console.log(`[broadcastPeerInfo] skipping self ${p.macAddr}`);
+        continue; // 不发给自己
+      }
+      if (!p.ws || p.ws.readyState !== WebSocket.OPEN) {
+        console.log(`[broadcastPeerInfo] skipping ${p.macAddr} - ws not open (readyState=${p.ws ? p.ws.readyState : 'null'})`);
+        continue;
+      }
 
-      await this.sendPacket(p.ws, {
+      const result = await this.sendPacket(p.ws, {
         packetType: PacketType.PeerInfo,
         communityId: hashCommunity(commState.community),
         srcMAC: parseMAC("00:00:00:00:00:00"),
         dstMAC: new Uint8Array(6),
         payload,
       });
+      console.log(`[broadcastPeerInfo] sent PeerInfo to ${p.macAddr}: ${result}`);
     }
   }
 
@@ -812,7 +1709,7 @@ export class PacketHandler {
    * 处理 PeerListRequest (type 6) - 返回当前社区的 Peer 列表
    */
   async handlePeerListRequest(ws, commState, header) {
-    const list = commState.buildPeerInfoList(header.dstMAC ? formatMAC(header.dstMAC) : "", PeerInfoEvent.TypeList);
+    const list = commState.buildPeerInfoList(header.srcMAC ? formatMAC(header.srcMAC) : "", PeerInfoEvent.TypeList);
     const payload = encodePeerInfoList(list);
     await this.sendPacket(ws, {
       packetType: PacketType.PeerInfo,
@@ -856,24 +1753,29 @@ export class PacketHandler {
 
     // 尝试单播转发
     if (targetPeer && targetPeer.online && targetPeer.ws) {
-      try {
-        await targetPeer.ws.send(snBuf);
-        console.log(`[PacketHandler] ForwardWithFallBack: unicast forward to ${dstMAC} OK (FlagFromSuperNode set)`);
-        return;
-      } catch (e) {
-        console.error(`[PacketHandler] ForwardWithFallBack: unicast forward ERROR to ${dstMAC}: ${e.message}`);
-        // 转发失败，继续回退广播
+      // FIX: Check readyState before sending (sendPacket does this, but ForwardWithFallBack was missing it)
+      if (targetPeer.ws.readyState !== WebSocket.OPEN) {
+        console.error(`[PacketHandler] ForwardWithFallBack: target ${dstMAC} ws not OPEN (readyState=${targetPeer.ws.readyState}), falling back to broadcast`);
+      } else {
+        try {
+          await targetPeer.ws.send(snBuf);
+          console.log(`[PacketHandler] ForwardWithFallBack: unicast forward to ${dstMAC} OK (FlagFromSuperNode set)`);
+          return;
+        } catch (e) {
+          console.error(`[PacketHandler] ForwardWithFallBack: unicast forward ERROR to ${dstMAC}: ${e.message}`);
+          // 转发失败，继续回退广播
+        }
       }
     }
 
-    // 回退广播：目标不存在、离线，或单播转发失败
+    // 回退广播：目标不存在、离线，ws 非 OPEN，或单播转发失败
     const onlinePeers = commState.getOnlinePeers();
     console.log(`[PacketHandler] ForwardWithFallBack: falling back to broadcast, ` +
       `target=${dstMAC} not available, broadcasting to ${onlinePeers.length} online peers ` +
       `(sender=${srcMAC})`);
 
     for (const p of onlinePeers) {
-      if (p.ws && p.ws !== ws) {
+      if (p.ws && p.ws !== ws && p.ws.readyState === WebSocket.OPEN) {
         try {
           await p.ws.send(snBuf);
           console.log(`[PacketHandler] ForwardWithFallBack:   -> broadcast forwarded to ${p.macAddr} (FlagFromSuperNode set)`);

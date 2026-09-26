@@ -1,38 +1,10 @@
 syntax = "proto3";
 
-package n2n;
+package p2p;
 
-option go_package = "n2n-go/pkg/protocol/netstruct";
+option go_package = "n2n-go/pkg/p2p";
 
-// 对应 Go 中的 SNPublicSecret
-message SnPublicSecret {
-  bool is_request = 1;
-  bytes pem_data = 2;
-}
-
-// 对应 Go 中的 RegisterRequest
-message RegisterRequest {
-  string edge_mac_addr = 1;
-  string edge_desc = 2;
-  string community_name = 3;
-  bytes encrypted_machine_id = 4;
-  bytes clear_machine_id = 5;
-  string p2p_endpoint = 6;
-  repeated string p2p_capabilities = 7;
-}
-
-// 对应 Go 中的 RegisterResponse
-message RegisterResponse {
-  bool is_register_ok = 1;
-  string virtual_ip = 2;
-  int32 masklen = 3;
-  bytes sn_public_key = 4;
-  string community_name = 5;
-  string assigned_mac = 6;
-  repeated PeerInfo peers = 7;
-}
-
-// 对应 Go 中的 PeerInfo (p2p.proto)
+// 对应 Go 中的 PeerInfo
 message PeerInfo {
   string virtual_ip = 1;
   bytes mac_addr = 2;
@@ -43,9 +15,55 @@ message PeerInfo {
   repeated string p2p_capabilities = 7;
   string nat_type = 8;
   uint64 last_seen = 9;
+  // NatHole instruction for relay-coordinated NAT hole-punching.
+  // When set, the receiving edge should act on the instruction to punch
+  // through the NAT together with the peer identified by target_mac.
+  NatHoleInstruction nat_hole_instruction = 10;
+  // Observed source address (host:port) that this edge's P2P socket actually
+  // receives packets from. Under a NAT that assigns a different port per
+  // destination, this differs from the STUN-discovered pub_socket, which is
+  // only a point-in-time snapshot and often stale by the time punching runs.
+  // The peer that observes us sends this back so we can punch to the
+  // verified-reachable address instead of the predicted one.
+  string observed_raddr = 11;
+
+  // NatHolePunchResult reports the outcome of this edge's most recent
+  // hole-punch attempt, so the relay can stop re-broadcasting instructions
+  // for pairs that already established P2P and immediately re-arm the ones
+  // that just failed.
+  NatHolePunchResult punch_result = 12;
+  // MAC of the peer this punch_result refers to. Empty means "no attempt
+  // in flight", which lets the relay distinguish a fresh report from a
+  // stale one.
+  string punch_result_peer_mac = 13;
 }
 
-// 对应 Go 中的 PeerInfoList (p2p.proto)
+// NatHolePunchState: outcome of a hole-punch attempt, as reported by an edge
+// to the relay. This closes the feedback loop that previously did not exist:
+// without it the relay can only guess, and either broadcasts forever or
+// gives up too early.
+enum NatHolePunchState {
+  // No attempt reported (default / zero value).
+  PunchStateNone = 0;
+  // An attempt is in flight; the relay should wait rather than re-broadcast.
+  PunchStateInProgress = 1;
+  // The attempt failed after exhausting its retries. The relay should
+  // re-broadcast a fresh instruction, applying its own backoff.
+  PunchStateFailed = 2;
+  // The punch succeeded and the tunnel is up. The relay must stop
+  // broadcasting for this pair until the tunnel drops.
+  PunchStateSucceeded = 3;
+}
+
+message NatHolePunchResult {
+  NatHolePunchState state = 1;
+  // Number of attempts the edge burned on the current round.
+  uint32 attempts = 2;
+  // Human-readable reason, for relay-side logging only.
+  string detail = 3;
+}
+
+// 对应 Go 中的 PeerInfoList
 message PeerInfoList {
   bool has_origin = 1;
   PeerInfo origin = 2;
@@ -53,70 +71,76 @@ message PeerInfoList {
   uint32 event_type = 4;
 }
 
-// 对应 Go 中的 PeerP2PInfos (p2p.proto)
+// 对应 Go 中的 PeerP2PInfos
 message PeerP2PInfos {
   PeerInfo from = 1;
   repeated PeerInfo to = 2;
 }
 
-// 对应 Go 中的 P2PFullState (p2p.proto)
+// 对应 Go 中的 P2PFullState
 message P2PFullState {
   string community_name = 1;
   bool is_request = 2;
-  // Reachables: map<string, PeerP2PInfos>
+  // Reachables: map[string]PeerP2PInfos
   map<string, PeerP2PInfos> reachables = 3;
-  // UnReachables: map<string, PeerCachedInfo>
+  // UnReachables: map[string]PeerCachedInfo
   map<string, PeerCachedInfo> unreachables = 4;
 }
 
-// 对应 Go 中的 PeerCachedInfo (p2p.proto)
+// 对应 Go 中的 PeerCachedInfo
 message PeerCachedInfo {
   string desc = 1;
   string mac_addr = 2;
   string virtual_ip = 3;
   string community = 4;
+  // time.Duration serialized as int64 nanoseconds
   int64 last_update_ns = 5;
 }
-
-// ICE Candidate 信令消息
-message ICECandidate {
-  string target_mac = 1;
-  string candidate = 2;
-  string sdp_mid = 3;
-  uint32 sdp_mline_index = 4;
+// NatHoleRole: which side initiates the punch
+enum NatHoleRole {
+  DetectRoleSender = 0;
+  DetectRoleReceiver = 1;
 }
 
-// TURN 凭证消息
-message TURNCredentials {
-  string username = 1;
-  string password = 2;
-  uint32 ttl = 3;
-  repeated string uris = 4;
+// NatHole message: relay server coordinates NAT hole-punching between
+// two HardNAT peers. Sent via PeerInfoList to both edges.
+message NatHole {
+  NatHoleRole role = 1;
+  // port range to try (inclusive)
+  uint32 ports_range_from = 2;
+  uint32 ports_range_to = 3;
+  // TTL in seconds for the punch packet
+  uint32 ttl = 4;
+  // MAC address of the edge that should send the punch packets
+  bytes target_mac = 5;
+  // MAC address of the edge that should receive the punch packets
+  bytes sender_mac = 6;
+  // P2P endpoint (ip:port) of the sender
+  string sender_p2p_endpoint = 7;
+  // pub_socket (ip:port) of the sender
+  string sender_pub_socket = 8;
+  // NAT type of the sender
+  string sender_nat_type = 9;
+  // NAT behavior of the sender
+  string sender_behavior = 10;
+  // Port difference observed by the sender
+  int32 ports_difference = 11;
+  // Whether the sender has regular port changes
+  bool regular_ports_change = 12;
 }
 
-// 对应 Go 中的 LeasesInfos
-message IppoolLease {
-  bytes ip = 1;
-  string mac = 2;
-  int64 expiry_ns = 3;
-  bool sticky = 4;
-  int64 last_renew_ns = 5;
-}
-
-message LeaseEdgeInfos {
-  string edge_id = 1;
-  bool is_registered = 2;
-  int64 time_since_last_update_ns = 3;
-  bytes virtual_ip = 4;
-}
-
-message LeaseWithEdgeInfos {
-  IppoolLease lease = 1;
-  LeaseEdgeInfos lease_edge_infos = 2;
-}
-
-message LeasesInfos {
-  bool is_request = 1;
-  string community_name = 2;
-  map<string, LeaseWithEdgeInfos> leases_with_edges_infos = 3;
+// NatHole instruction embedded in PeerInfoList for relay-coordinated punching
+message NatHoleInstruction {
+  NatHoleRole role = 1;
+  uint32 ports_range_from = 2;
+  uint32 ports_range_to = 3;
+  uint32 ttl = 4;
+  bytes target_mac = 5;
+  bytes sender_mac = 6;
+  string sender_p2p_endpoint = 7;
+  string sender_pub_socket = 8;
+  string sender_nat_type = 9;
+  string sender_behavior = 10;
+  int32 ports_difference = 11;
+  bool regular_ports_change = 12;
 }

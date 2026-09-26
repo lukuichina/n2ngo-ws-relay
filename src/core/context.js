@@ -8,7 +8,7 @@
  */
 
 import { IPAM } from "./ipam.js";
-import { numberToIp } from "./constants.js";
+import { numberToIp, parseMAC } from "./constants.js";
 
 export class CommunityState {
   constructor(community, relayRoom, networkConfig) {
@@ -99,7 +99,7 @@ export class CommunityState {
    * @returns {Object} { virtualIP, isNew, peerInfo }
    */
   async registerPeer(params) {
-    const { macAddr, ws, p2pEndpoint, p2pCapabilities, pubSocket, encryptedMachineID } = params;
+    const { macAddr, ws, p2pEndpoint, p2pCapabilities, pubSocket, natType, encryptedMachineID } = params;
     const normalizedMAC = macAddr.toLowerCase();
 
     // 分配虚拟 IP
@@ -116,7 +116,7 @@ export class CommunityState {
       p2pEndpoint: p2pEndpoint || "",
       p2pCapabilities: p2pCapabilities || [],
       pubSocket: pubSocket || "",
-      natType: "unknown",
+      natType: natType || "unknown",
       lastSeen: now,
       registeredAt: now,
       encryptedMachineID: encryptedMachineID ? Array.from(encryptedMachineID) : [],
@@ -138,6 +138,7 @@ export class CommunityState {
    * @param {string} macAddr
    */
   async unregisterPeer(macAddr) {
+    if (!macAddr) return false;
     const normalizedMAC = macAddr.toLowerCase();
     const peer = this.peers.get(normalizedMAC);
     if (!peer) return false;
@@ -155,6 +156,14 @@ export class CommunityState {
    * 更新 Peer 信息 (心跳、P2P 端点变更等)
    */
   updatePeer(macAddr, updates) {
+    // A WebSocket is recorded in relayRoom.connections with macAddr: null the
+    // moment it connects (relay_room.js), and is only filled in by
+    // handleRegister. Any packet that arrives in between — a Ping/Pong from
+    // the edge's liveness check is the common one — reaches this function
+    // with a null MAC, and null.toLowerCase() throws out of the dispatcher,
+    // aborting the whole handler. Nothing to update in that window, so drop
+    // the call instead of crashing.
+    if (!macAddr) return false;
     const normalizedMAC = macAddr.toLowerCase();
     const peer = this.peers.get(normalizedMAC);
     if (!peer) return false;
@@ -169,6 +178,7 @@ export class CommunityState {
    * 获取 Peer 信息
    */
   getPeer(macAddr) {
+    if (!macAddr) return undefined;
     return this.peers.get(macAddr.toLowerCase());
   }
 
@@ -218,6 +228,10 @@ export class CommunityState {
    * @param {Object} infos - PeerP2PInfos { from, to }
    */
   setP2PInfosFor(edgeMacADDR, infos) {
+    // Same null-MAC window as updatePeer(): the WebSocket exists in
+    // connections before the register handler fills in its MAC, and a
+    // P2PStateInfo can land in that gap.
+    if (!edgeMacADDR) return false;
     const normalizedMAC = edgeMacADDR.toLowerCase();
     const peer = this.peers.get(normalizedMAC);
     if (!peer) {
@@ -277,36 +291,37 @@ export class CommunityState {
    * 返回 protobuf 格式的对象，字段名与 proto 定义一致
    * @param {string} [originMAC] - 请求者 MAC (用于填充 Origin 字段)
    * @param {number} eventType - 事件类型
+   * @param {Map<string, Object>|null} natHoleInstructions - 可选的打洞指令映射
    * @returns {Object}
    */
-  buildPeerInfoList(originMAC, eventType = 0) {
+  buildPeerInfoList(originMAC, eventType = 0, natHoleInstructions = null) {
     const peers = this.getOnlinePeers();
     const peerInfos = peers.map(p => {
       const virtualIPStr = typeof p.virtualIP === 'number'
         ? numberToIp(p.virtualIP)
         : p.virtualIP;
-      let pubSocketObj = null;
-      if (p.pubSocket) {
-        if (typeof p.pubSocket === 'string') {
-          const lastColon = p.pubSocket.lastIndexOf(':');
-          if (lastColon > 0) {
-            pubSocketObj = {
-              ip: p.pubSocket.substring(0, lastColon),
-              port: parseInt(p.pubSocket.substring(lastColon + 1)) || 0,
-            };
-          }
-        } else if (typeof p.pubSocket === 'object') {
-          pubSocketObj = p.pubSocket;
-        }
-      }
+      // Use pub_socket as a STRING (not object) — matches protobuf type
+      // definition "string pub_socket" in p2p.proto. Previously we encoded
+      // it as {ip, port} which caused the protobuf JS encoder to produce
+      // invalid wire bytes for this field.
+      const pubSocketStr = p.pubSocket || "";
+      const instr = natHoleInstructions ? natHoleInstructions.get(p.macAddr) : null;
       return {
-        mac_addr: p.macAddr,
+        mac_addr: parseMAC(p.macAddr),
         virtual_ip: virtualIPStr,
-        pub_socket: pubSocketObj,
+        pub_socket: pubSocketStr,
+        // Observed source address reported by this peer: the address its
+        // packets ACTUALLY arrive from. Under a NAT that binds a different
+        // public port per destination, pub_socket is a STUN snapshot valid
+        // only for the STUN server's destination and is usually stale by
+        // punch time. observed_raddr is verified-reachable, so the peer
+        // punches to it instead of guessing.
+        observed_raddr: p.observedRaddr || "",
         p2p_endpoint: this.config.allowP2P && !this.config.disableRelay ? p.p2pEndpoint : "",
         nat_type: p.natType || "unknown",
         last_seen: p.lastSeen || Math.floor(Date.now() / 1000),
         p2p_capabilities: p.p2pCapabilities || [],
+        natHoleInstruction: instr || null,
       };
     });
 
@@ -318,28 +333,16 @@ export class CommunityState {
         const originVipStr = typeof originPeer.virtualIP === 'number'
           ? numberToIp(originPeer.virtualIP)
           : originPeer.virtualIP;
-        let originPubSocketObj = null;
-        if (originPeer.pubSocket) {
-          if (typeof originPeer.pubSocket === 'string') {
-            const lastColon = originPeer.pubSocket.lastIndexOf(':');
-            if (lastColon > 0) {
-              originPubSocketObj = {
-                ip: originPeer.pubSocket.substring(0, lastColon),
-                port: parseInt(originPeer.pubSocket.substring(lastColon + 1)) || 0,
-              };
-            }
-          } else if (typeof originPeer.pubSocket === 'object') {
-            originPubSocketObj = originPeer.pubSocket;
-          }
-        }
+        const originInstr = natHoleInstructions ? natHoleInstructions.get(originPeer.macAddr) : null;
         origin = {
-          mac_addr: originPeer.macAddr,
+          mac_addr: parseMAC(originPeer.macAddr),
           virtual_ip: originVipStr,
-          pub_socket: originPubSocketObj,
+          pub_socket: originPeer.pubSocket || "",
           p2p_endpoint: this.config.allowP2P && !this.config.disableRelay ? originPeer.p2pEndpoint : "",
           nat_type: originPeer.natType || "unknown",
           last_seen: originPeer.lastSeen || Math.floor(Date.now() / 1000),
           p2p_capabilities: originPeer.p2pCapabilities || [],
+          natHoleInstruction: originInstr || null,
         };
         hasOrigin = true;
       }

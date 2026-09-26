@@ -25,6 +25,7 @@ const types = {
   LeaseEdgeInfos:     $root.n2n.LeaseEdgeInfos,
   LeaseWithEdgeInfos: $root.n2n.LeaseWithEdgeInfos,
   LeasesInfos:        $root.n2n.LeasesInfos,
+  NatHoleInstruction: $root.n2n.NatHoleInstruction,
 };
 
 /**

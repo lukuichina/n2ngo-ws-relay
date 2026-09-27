@@ -37,13 +37,23 @@ import {
   encodeP2PFullState,
   flagPacketFromSupernode,
   parseVFuzeHeader,
+  macBytesToStr,
 } from "./packet.js";
 import { encode } from "./protos.js";
 import { decryptRSA_OAEP, importRSAPrivateKey } from "./crypto.js";
+import {
+  NatHoleAnalyzer,
+  behaviorsForMode,
+  pairKeyFor,
+  NAT_HOLE_MODE_EASY_PAIR,
+  NAT_HOLE_MODE_HARD_PAIR,
+  NAT_HOLE_BEHAVIOR_NO_TTL_SENDER_FIRST,
+  NAT_HOLE_BEHAVIOR_NO_TTL_RECEIVER_FIRST,
+} from "./nathole.js";
 
 // ---------- FRP NAT Hole Coordination ----------
-// Ported from frp/pkg/nathole/classify.go + analysis.go (mode 3: HardNAT & HardNAT).
-// Determines which side sends punch packets and which side listens.
+// Ported from frp/pkg/nathole/classify.go + analysis.go.
+// The behaviour ladder and the per-pair strategy memory live in nathole.js.
 
 const EasyNAT = "EasyNAT";
 const HardNAT = "HardNAT";
@@ -68,27 +78,25 @@ function classifyFeatureCount(features) {
   return { easyCount, hardCount, portsChangedRegularCount };
 }
 
-// Mode 3 (HardNAT & HardNAT, both changes in ports are regular):
-//   sender, portsRangeNumber 10 | receiver, ttl 7, portsRangeNumber 10
-//   sender, portsRangeNumber 10 | receiver, ttl 4, portsRangeNumber 10
-//   sender, portsRangeNumber 10 | receiver, portsRangeNumber 10
-//   receiver, ttl 7, portsRangeNumber 10 | sender, portsRangeNumber 10
-//   receiver, ttl 4, portsRangeNumber 10 | sender, portsRangeNumber 10
-//   receiver, portsRangeNumber 10 | sender, portsRangeNumber 10
-//
-// We use index 0: sender with portsRangeNumber=10, receiver with TTL=7 + portsRangeNumber=10.
-// The sender is the peer whose pub_socket port is lower (deterministic tie-break).
-const mode3Behaviors = [
-  { role: DetectRoleSender, portsRangeNumber: 10 },
-  { role: DetectRoleReceiver, ttl: 7, portsRangeNumber: 10 },
-];
+// Mode 3 (HardNAT & HardNAT, both changes in ports are regular) and Mode 0
+// (EasyNAT & EasyNAT) ladders are in nathole.js. Which rung a given pair
+// starts on, and where it goes after each outcome, is decided by the
+// per-pair NatHoleAnalyzer rather than hardcoded here -- that is the whole
+// point of porting it.
 
 const PORTS_RANGE_NUMBER = 10;
 const DEFAULT_TTL = 7;
 
 // Decide sender/receiver for a pair of NAT peers.
-// Returns { senderMAC, receiverMAC, senderInstruction, receiverInstruction } or null.
-function decideNatHoleRoles(peerA, peerB) {
+//
+// behaviorIndex selects the rung of the FRP behaviour ladder (see nathole.js);
+// it is supplied by the caller's per-pair analyzer. The index travels to the
+// edge in NatHoleInstruction.behavior_index, because protobuf3 cannot
+// distinguish an unset ttl from "no ttl at all" and "no ttl at all" is what
+// ladder entries 4 and 5 mean.
+//
+// Returns { senderMAC, receiverMAC, senderInstruction, receiverInstruction, mode, behaviorIndex } or null.
+function decideNatHoleRoles(peerA, peerB, behaviorIndex = 0) {
   const features = [peerNatFeature(peerA), peerNatFeature(peerB)];
   const { hardCount, portsChangedRegularCount } = classifyFeatureCount(features);
 
@@ -173,20 +181,21 @@ function decideNatHoleRoles(peerA, peerB) {
     receiverPortsRangeTo = Math.min(hi2, 65535);
   }
 
-  const senderInstr = {
-    role: DetectRoleSender,
-    portsRangeFrom: senderPortsRangeFrom,
-    portsRangeTo: senderPortsRangeTo,
-    // FRP parity: the sender's detect/punch packet must traverse the full
-    // path, so it must go out with the socket's normal TTL. FRP encodes this
-    // as TTL:0 in DetectBehavior for the sender role (only the receiver uses
-    // ttl 7, and only to open its own NAT mapping -- see mode3Behaviors).
-    //
-    // Giving the sender ttl 7 sets IP_TTL on the shared P2P socket for that
-    // write, so the one packet that actually has to reach the peer dies at the
-    // first router past hop 7: both sides log "punched ... once" (the local
-    // WriteToUDP succeeded) while "Punch packet received" stays 0 forever.
-    ttl: 0,
+  const mode = bothEasyNAT ? NAT_HOLE_MODE_EASY_PAIR : NAT_HOLE_MODE_HARD_PAIR;
+  const ladder = behaviorsForMode(mode);
+  const rung = ladder[behaviorIndex] || ladder[0];
+  const senderBeh = rung.sender || {};
+  const receiverBeh = rung.receiver || {};
+  // FRP sends a role's ttl only when the ladder entry names one; a missing
+  // ttl means "do not touch the socket's TTL" (nathole.go:363 guards its
+  // SetTTL with `if ttl > 0`). Ladder entries 4 and 5 rely on that, and they
+  // are the only rungs that can work when the path is longer than the TTL:
+  // a probe that dies before the NAT translation point opens no mapping.
+  const senderTTL = senderBeh.ttl || 0;
+  const receiverTTL = receiverBeh.ttl || 0;
+  const senderDelayMs = senderBeh.sendDelayMs || 0;
+
+  const sharedFields = {
     targetMac: strToMacBytes(receiver.macAddr),
     senderMac: strToMacBytes(sender.macAddr),
     senderP2pEndpoint: sender.p2pEndpoint || "",
@@ -195,21 +204,34 @@ function decideNatHoleRoles(peerA, peerB) {
     senderBehavior: (peerNatFeature(sender) ? peerNatFeature(sender).behavior : "BehaviorPortChanged") || "BehaviorPortChanged",
     portsDifference: portsDiff,
     regularPortsChange: !!(peerNatFeature(sender) && peerNatFeature(sender).regularPortsChange),
+    // Where on the ladder this came from, so the edge knows a ttl of 0 is a
+    // deliberate "full path" and not a missing field.
+    mode,
+    behaviorIndex,
+  };
+
+  const senderInstr = {
+    role: DetectRoleSender,
+    portsRangeFrom: senderPortsRangeFrom,
+    portsRangeTo: senderPortsRangeTo,
+    ttl: senderTTL,
+    sendDelayMs: senderDelayMs,
+    ...sharedFields,
   };
 
   const receiverInstr = {
     role: DetectRoleReceiver,
     portsRangeFrom: receiverPortsRangeFrom,
     portsRangeTo: receiverPortsRangeTo,
-    ttl: bothEasyNAT ? 7 : DEFAULT_TTL,
+    // 0 is meaningful here and is passed through as-is: it is what makes the
+    // edge send with the socket's normal TTL instead of lowering it.
+    ttl: receiverTTL,
+    // The receiver always goes out first, so it carries no delay of its own.
+    sendDelayMs: 0,
+    // The receiver punches at the sender, so its target is the sender -- the
+    // pre-shared targetMac above names the receiver and must be overridden.
+    ...sharedFields,
     targetMac: strToMacBytes(sender.macAddr),
-    senderMac: strToMacBytes(sender.macAddr),
-    senderP2pEndpoint: sender.p2pEndpoint || "",
-    senderPubSocket: sender.pubSocket || "",
-    senderNatType: sender.natType || HardNAT,
-    senderBehavior: (peerNatFeature(sender) ? peerNatFeature(sender).behavior : "BehaviorPortChanged") || "BehaviorPortChanged",
-    portsDifference: portsDiff,
-    regularPortsChange: !!(peerNatFeature(sender) && peerNatFeature(sender).regularPortsChange),
   };
 
   return {
@@ -217,6 +239,9 @@ function decideNatHoleRoles(peerA, peerB) {
     receiverMAC: receiver.macAddr,
     senderInstruction: senderInstr,
     receiverInstruction: receiverInstr,
+    mode,
+    behaviorIndex,
+    senderDelayMs,
   };
 }
 
@@ -371,6 +396,16 @@ export class PacketHandler {
     // failure.
     this.natHolePunchState = new Map();
 
+    // Per-pair strategy memory: which rung of the FRP behaviour ladder to
+    // start from for a given pair, and which rung moved last time an edge
+    // reported an outcome. See nathole.js.
+    //
+    // Without it the relay re-derived one hardcoded instruction forever: on
+    // 2026-09-27 the E1/E2 pair received 135 NatHoleInstructions, every one
+    // identical (role=receiver, ttl=7), and every one of them unable to work
+    // on a 12-hop path.
+    this.natHoleAnalyzer = new NatHoleAnalyzer();
+
     // Consecutive failed rounds per pair, so the re-arm backoff escalates
     // instead of hammering at a fixed interval.
     this._failCounts = new Map();
@@ -451,6 +486,17 @@ export class PacketHandler {
     for (const key of this._failCounts.keys()) {
       if (isInKey(key)) this._failCounts.delete(key);
     }
+    // A reconnect changes the NAT mapping, so every "this rung worked for
+    // them" credit is stale. FRP parity: frps drops the whole per-client
+    // analyzer entry when a client disconnects (controller.go:68,643).
+    if (this.natHoleAnalyzer) this.natHoleAnalyzer.forgetMAC(macAddr);
+    if (this._lastDispatchedRung) {
+      const isInKey2 = (k) =>
+        String(k).split("|").some((m) => String(m).toLowerCase() === needle);
+      for (const k of this._lastDispatchedRung.keys()) {
+        if (isInKey2(k)) this._lastDispatchedRung.delete(k);
+      }
+    }
   }
 
   recordPunchResult(reporterMAC, peerMAC, result) {
@@ -463,6 +509,12 @@ export class PacketHandler {
       attempts: result.attempts || 0,
       detail: result.detail || "",
       at: Date.now(),
+      // The rung this outcome belongs to, so the analyzer's credit lands on
+      // the strategy that actually ran. Written down when the instruction
+      // goes out; absent means the report predates strategy memory, in which
+      // case there is nothing meaningful to credit.
+      behaviorIndex:
+        typeof result.behaviorIndex === "number" ? result.behaviorIndex : null,
     });
     if (state === 3) {
       // Tunnel is up: drop every piece of per-pair retry state so a later
@@ -471,6 +523,20 @@ export class PacketHandler {
       this._failCounts.delete(key);
     } else if (state === 2) {
       this._failCounts.set(key, (this._failCounts.get(key) || 0) + 1);
+    }
+
+    // Feed the strategy memory. FRP parity: HandleReport (controller.go:265)
+    // calls analyzer.ReportSuccess(m.Mode, m.Behavior) when the client reports
+    // success; we additionally penalise a reported failure, see the comment on
+    // NatHoleAnalyzer.report().
+    const reported = this.natHolePunchState.get(key);
+    if (reported.behaviorIndex != null && (state === 2 || state === 3)) {
+      const score = this.natHoleAnalyzer.report(key, reported.behaviorIndex, state === 3);
+      console.log(
+        `[recordPunchResult] pair ${key} ${state === 3 ? "succeeded" : "failed"} on ` +
+        `ladder index ${reported.behaviorIndex} → score ${score}; next rung for this pair: ` +
+        `${this.natHoleAnalyzer.recommand(key)}`
+      );
     }
   }
 
@@ -626,8 +692,21 @@ export class PacketHandler {
       if (paired.has(eligible[i].macAddr)) continue;
       for (let j = i + 1; j < eligible.length; j++) {
         if (paired.has(eligible[j].macAddr)) continue;
-        const result = decideNatHoleRoles(eligible[i], eligible[j]);
+
+        // Which rung of the behaviour ladder this pair starts from.
+        //
+        // FRP parity: pkg/nathole/analysis.go:210-260 -- a per-pair score
+        // vector, recommended before the instruction is built, credited when
+        // an edge reports the outcome. Previously the relay emitted one
+        // hardcoded instruction forever: 135 identical NatHoleInstructions
+        // for the E1/E2 pair on 2026-09-27, all role=receiver/ttl=7, none of
+        // which could work on a 12-hop path.
+        const ladderKey = pairKeyFor(eligible[i].macAddr, eligible[j].macAddr);
+        const behaviorIndex = this.natHoleAnalyzer.recommand(ladderKey);
+        const result = decideNatHoleRoles(eligible[i], eligible[j], behaviorIndex);
         if (!result) continue;
+        this._lastDispatchedRung = this._lastDispatchedRung || new Map();
+        this._lastDispatchedRung.set(ladderKey, behaviorIndex);
 
         // Backoff gate.
         //
@@ -646,7 +725,13 @@ export class PacketHandler {
         // early only when it previously SUCCEEDED (P2PStatus shows the tunnel
         // is up). Genuine NAT port changes are picked up by the 5-minute cap.
         const pairKey = [result.senderMAC, result.receiverMAC].sort().join("|");
-        const signature = result.senderMAC + "->" + result.receiverMAC;
+        // The rung is part of the signature on purpose. A pair that has just
+        // been told to try a different ladder entry must not be suppressed by
+        // the backoff that was armed for the previous one -- otherwise the
+        // strategy memory decides the next rung and then the backoff throws
+        // the decision away, and the pair is back to retrying rung 0 forever.
+        const signature =
+          result.senderMAC + "->" + result.receiverMAC + "@" + result.behaviorIndex;
         const now = Date.now();
 
         // A pair that already has a live tunnel must be re-coordinated
@@ -1333,10 +1418,21 @@ export class PacketHandler {
     let sent = await this.sendNatHoleInstructionBatch(commState, receivers);
 
     if (senders.size > 0) {
-      if (NAT_SENDER_DISPATCH_DELAY_MS <= 0) {
+      // The ladder entry can override the delay per round: FRP's mode0
+      // entries 6-9 ask the sender to wait 5s or 10s instead of the
+      // default 1s, which is what a symmetric NAT needs before the
+      // receiver's mapping exists. 0 on the instruction means "use the
+      // configured default".
+      let delayMs = NAT_SENDER_DISPATCH_DELAY_MS;
+      for (const [, instr] of senders) {
+        if (instr.sendDelayMs) {
+          delayMs = instr.sendDelayMs;
+          break;
+        }
+      }
+      if (delayMs <= 0) {
         sent += await this.sendNatHoleInstructionBatch(commState, senders);
       } else {
-        const delayMs = NAT_SENDER_DISPATCH_DELAY_MS;
         // Awaited rather than setTimeout'd: a Durable Object may be evicted
         // between the handler returning and a timer firing, and a dropped
         // sender instruction costs a whole punch round (~15s of backoff).
@@ -1493,12 +1589,34 @@ export class PacketHandler {
     const connInfo = this.relayRoom.connections.get(ws);
     if (!connInfo) return;
 
+    // Snapshot the departing peer BEFORE unregisterPeer() flips it offline.
+    // The notification has to name it explicitly: buildPeerInfoList's default
+    // source is getOnlinePeers(), which by definition no longer contains it.
+    const departing = commState.peers.get(String(connInfo.macAddr).toLowerCase());
+
     await commState.unregisterPeer(connInfo.macAddr);
     this.clearPairStateFor(connInfo.macAddr);
     this.relayRoom.connections.delete(ws);
 
     // 广播 Peer 下线通知
-    await this.broadcastPeerInfo(commState, { macAddr: connInfo.macAddr }, PeerInfoEvent.TypeUnregister);
+    //
+    // The payload names exactly one peer: the one that left. Every remaining
+    // edge deletes only that MAC from its registry and leaves its own peers
+    // alone, which is the isolation FRP gets for free from never shipping a
+    // peer list to clients at all.
+    if (departing) {
+      await this.broadcastPeerInfo(
+        commState,
+        { macAddr: connInfo.macAddr },
+        PeerInfoEvent.TypeUnregister,
+        [departing]
+      );
+    } else {
+      console.warn(
+        `[PacketHandler] ${connInfo.macAddr} unregistered but had no registry entry — ` +
+        `no unregister notification sent (nothing to name in it)`
+      );
+    }
 
     console.log(`[PacketHandler] ${connInfo.macAddr} unregistered`);
   }
@@ -1650,13 +1768,22 @@ export class PacketHandler {
 
   /**
    * 广播 PeerInfo 变更给社区内所有在线 Peer (排除发送者)
+   *
+   * `peerOverride` supplies the payload's peer_infos explicitly instead of
+   * getOnlinePeers(). It is required for a TypeUnregister broadcast: the Go
+   * edge deletes every MAC listed in that event type (pkg/p2p/p2p.go,
+   * HandlePeerInfoList case TypeUnregister), so a payload built from
+   * getOnlinePeers() -- i.e. the nodes that are *staying* -- turns one node
+   * going offline into a registry wipe of every other pair. See
+   * buildPeerInfoList.
    */
-  async broadcastPeerInfo(commState, peerInfo, eventType) {
-    const list = commState.buildPeerInfoList(peerInfo.macAddr, eventType);
+  async broadcastPeerInfo(commState, peerInfo, eventType, peerOverride = null) {
+    const list = commState.buildPeerInfoList(peerInfo.macAddr, eventType, null, peerOverride);
     const payload = encodePeerInfoList(list);
 
     const onlinePeers = commState.getOnlinePeers();
-    console.log(`[broadcastPeerInfo] eventType=${eventType} registeringMac=${peerInfo.macAddr} onlinePeers=${onlinePeers.length} peerList=${JSON.stringify(onlinePeers.map(p => ({mac: p.macAddr, wsOpen: p.ws && p.ws.readyState === WebSocket.OPEN})))}`);
+    const listed = (list.peer_infos || []).map((i) => macBytesToStr(i.mac_addr));
+    console.log(`[broadcastPeerInfo] eventType=${eventType} registeringMac=${peerInfo.macAddr} onlinePeers=${onlinePeers.length} payloadMacs=[${listed.join(",")}]`);
     for (const p of onlinePeers) {
       if (p.macAddr === peerInfo.macAddr) {
         console.log(`[broadcastPeerInfo] skipping self ${p.macAddr}`);

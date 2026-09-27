@@ -292,10 +292,23 @@ export class CommunityState {
    * @param {string} [originMAC] - 请求者 MAC (用于填充 Origin 字段)
    * @param {number} eventType - 事件类型
    * @param {Map<string, Object>|null} natHoleInstructions - 可选的打洞指令映射
+   * @param {Array<Object>|null} peerOverride - 用这些 peer 条目替代
+   *   getOnlinePeers() 作为 peer_infos 的来源。
+   *
+   *   注销广播必须传它。FRP parity: frpc 从不持有对端名单
+   *   (pkg/nathole/controller.go:53 的状态挂在 per-pair 的 Session/SID 上，
+   *   controller.go:239/247 只把响应发给那一对里的两个 transporter)，
+   *   所以"某个节点下线"在 FRP 里根本不是一次"修改别人本地表"的操作。
+   *   我们没有这个隔离：Go 侧 HandlePeerInfoList 的 case TypeUnregister
+   *   (pkg/p2p/p2p.go) 会对列表里的每一个 MAC 调 RemovePeer。如果这里用
+   *   getOnlinePeers() 构造 payload，发出去的恰好是**还活着**的那些节点，
+   *   于是一台机器下线就把它和所有幸存者互相从对方注册表里删掉 ——
+   *   这正是 2026-09-27T07:30:17Z 那次 8.5 小时隧道被清零的原因。
+   *   离场的那台此时已经 offline，所以必须由调用方把它显式传进来。
    * @returns {Object}
    */
-  buildPeerInfoList(originMAC, eventType = 0, natHoleInstructions = null) {
-    const peers = this.getOnlinePeers();
+  buildPeerInfoList(originMAC, eventType = 0, natHoleInstructions = null, peerOverride = null) {
+    const peers = peerOverride ? peerOverride : this.getOnlinePeers();
     const peerInfos = peers.map(p => {
       const virtualIPStr = typeof p.virtualIP === 'number'
         ? numberToIp(p.virtualIP)

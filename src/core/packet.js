@@ -135,7 +135,7 @@ function macStrToBytes(macStr) {
   return new Uint8Array(parts);
 }
 
-function macBytesToStr(macBytes) {
+export function macBytesToStr(macBytes) {
   if (typeof macBytes === 'string') return macBytes;
   const arr = macBytes instanceof Uint8Array ? macBytes : new Uint8Array(macBytes);
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join(':');

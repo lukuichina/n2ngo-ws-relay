@@ -91,6 +91,15 @@ message NatHolePunchResult {
   uint32 attempts = 2;
   // Human-readable reason, for relay-side logging only.
   string detail = 3;
+  // Index into the relay's behaviour ladder that this round actually ran.
+  //
+  // The relay keeps a per-pair score per ladder rung and needs to know which
+  // one to credit or blame (FRP parity: pkg/nathole/controller.go:271
+  // HandleReport calls ReportSuccess(m.Mode, m.Behavior) with the behavior
+  // the client reports). Reporting it beats having the relay guess from its
+  // own last dispatch, which is wrong whenever an instruction was replaced
+  // between being sent and the outcome coming back.
+  uint32 behavior_index = 4;
 }
 
 // 对应 Go 中的 PeerInfoList (p2p.proto)
@@ -174,6 +183,20 @@ message NatHoleInstruction {
   string sender_behavior = 10;
   int32 ports_difference = 11;
   bool regular_ports_change = 12;
+  // Coordination mode this instruction was decided under (FRP nathole mode).
+  // 0 = EasyNAT-EasyNAT (no port scan), 3 = HardNAT pair (scan a port range).
+  uint32 mode = 13;
+  // Index into the behaviour ladder (FRP pkg/nathole/analysis.go
+  // mode0Behaviors) this instruction was drawn from.
+  //
+  // Carried explicitly because protobuf3 cannot distinguish an unset uint32
+  // ttl from "no ttl at all", and "no ttl at all" is precisely what ladder
+  // entries 4 and 5 mean: both roles emit their probe with the socket's
+  // normal TTL, so it traverses the full path instead of dying at hop 4.
+  uint32 behavior_index = 14;
+  // Milliseconds the relay held this instruction back relative to its
+  // counterpart. 0 means "use the relay's configured default".
+  uint32 send_delay_ms = 15;
 }
 
 // ICE Candidate 信令消息

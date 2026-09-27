@@ -2037,6 +2037,7 @@ export const n2n = $root.n2n = (() => {
          * @property {n2n.NatHolePunchState|null} [state] NatHolePunchResult state
          * @property {number|null} [attempts] NatHolePunchResult attempts
          * @property {string|null} [detail] NatHolePunchResult detail
+         * @property {number|null} [behaviorIndex] NatHolePunchResult behaviorIndex
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -2093,6 +2094,14 @@ export const n2n = $root.n2n = (() => {
         NatHolePunchResult.prototype.detail = "";
 
         /**
+         * NatHolePunchResult behaviorIndex.
+         * @member {number} behaviorIndex
+         * @memberof n2n.NatHolePunchResult
+         * @instance
+         */
+        NatHolePunchResult.prototype.behaviorIndex = 0;
+
+        /**
          * Creates a new NatHolePunchResult instance using the specified properties.
          * @function create
          * @memberof n2n.NatHolePunchResult
@@ -2130,6 +2139,8 @@ export const n2n = $root.n2n = (() => {
                 writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.attempts);
             if (message.detail != null && $Object.hasOwnProperty.call(message, "detail") && message.detail !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.detail);
+            if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex") && message.behaviorIndex !== 0)
+                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.behaviorIndex);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -2214,6 +2225,15 @@ export const n2n = $root.n2n = (() => {
                             delete message.detail;
                         continue;
                     }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.behaviorIndex = value;
+                        else
+                            delete message.behaviorIndex;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -2271,6 +2291,9 @@ export const n2n = $root.n2n = (() => {
             if (message.detail != null && $Object.hasOwnProperty.call(message, "detail"))
                 if (!$util.isString(message.detail))
                     return "detail: string expected";
+            if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex"))
+                if (!$util.isInteger(message.behaviorIndex))
+                    return "behaviorIndex: integer expected";
             return null;
         };
 
@@ -2320,6 +2343,9 @@ export const n2n = $root.n2n = (() => {
             if (object.detail != null)
                 if (typeof object.detail !== "string" || object.detail.length)
                     message.detail = $String(object.detail);
+            if (object.behaviorIndex != null)
+                if ($Number(object.behaviorIndex) !== 0)
+                    message.behaviorIndex = object.behaviorIndex >>> 0;
             return message;
         };
 
@@ -2344,6 +2370,7 @@ export const n2n = $root.n2n = (() => {
                 object.state = options.enums === $String ? "PunchStateNone" : 0;
                 object.attempts = 0;
                 object.detail = "";
+                object.behaviorIndex = 0;
             }
             if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
                 object.state = options.enums === $String ? $root.n2n.NatHolePunchState[message.state] === $undefined ? message.state : $root.n2n.NatHolePunchState[message.state] : message.state;
@@ -2351,6 +2378,8 @@ export const n2n = $root.n2n = (() => {
                 object.attempts = message.attempts;
             if (message.detail != null && $Object.hasOwnProperty.call(message, "detail"))
                 object.detail = message.detail;
+            if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex"))
+                object.behaviorIndex = message.behaviorIndex;
             return object;
         };
 
@@ -4622,6 +4651,9 @@ export const n2n = $root.n2n = (() => {
          * @property {string|null} [senderBehavior] NatHoleInstruction senderBehavior
          * @property {number|null} [portsDifference] NatHoleInstruction portsDifference
          * @property {boolean|null} [regularPortsChange] NatHoleInstruction regularPortsChange
+         * @property {number|null} [mode] NatHoleInstruction mode
+         * @property {number|null} [behaviorIndex] NatHoleInstruction behaviorIndex
+         * @property {number|null} [sendDelayMs] NatHoleInstruction sendDelayMs
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -4750,6 +4782,30 @@ export const n2n = $root.n2n = (() => {
         NatHoleInstruction.prototype.regularPortsChange = false;
 
         /**
+         * NatHoleInstruction mode.
+         * @member {number} mode
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.mode = 0;
+
+        /**
+         * NatHoleInstruction behaviorIndex.
+         * @member {number} behaviorIndex
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.behaviorIndex = 0;
+
+        /**
+         * NatHoleInstruction sendDelayMs.
+         * @member {number} sendDelayMs
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.sendDelayMs = 0;
+
+        /**
          * Creates a new NatHoleInstruction instance using the specified properties.
          * @function create
          * @memberof n2n.NatHoleInstruction
@@ -4805,6 +4861,12 @@ export const n2n = $root.n2n = (() => {
                 writer.uint32(/* id 11, wireType 0 =*/88).int32(message.portsDifference);
             if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange") && message.regularPortsChange !== false)
                 writer.uint32(/* id 12, wireType 0 =*/96).bool(message.regularPortsChange);
+            if (message.mode != null && $Object.hasOwnProperty.call(message, "mode") && message.mode !== 0)
+                writer.uint32(/* id 13, wireType 0 =*/104).uint32(message.mode);
+            if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex") && message.behaviorIndex !== 0)
+                writer.uint32(/* id 14, wireType 0 =*/112).uint32(message.behaviorIndex);
+            if (message.sendDelayMs != null && $Object.hasOwnProperty.call(message, "sendDelayMs") && message.sendDelayMs !== 0)
+                writer.uint32(/* id 15, wireType 0 =*/120).uint32(message.sendDelayMs);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -4970,6 +5032,33 @@ export const n2n = $root.n2n = (() => {
                             delete message.regularPortsChange;
                         continue;
                     }
+                case 13: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.mode = value;
+                        else
+                            delete message.mode;
+                        continue;
+                    }
+                case 14: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.behaviorIndex = value;
+                        else
+                            delete message.behaviorIndex;
+                        continue;
+                    }
+                case 15: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.sendDelayMs = value;
+                        else
+                            delete message.sendDelayMs;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -5054,6 +5143,15 @@ export const n2n = $root.n2n = (() => {
             if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
                 if (typeof message.regularPortsChange !== "boolean")
                     return "regularPortsChange: boolean expected";
+            if (message.mode != null && $Object.hasOwnProperty.call(message, "mode"))
+                if (!$util.isInteger(message.mode))
+                    return "mode: integer expected";
+            if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex"))
+                if (!$util.isInteger(message.behaviorIndex))
+                    return "behaviorIndex: integer expected";
+            if (message.sendDelayMs != null && $Object.hasOwnProperty.call(message, "sendDelayMs"))
+                if (!$util.isInteger(message.sendDelayMs))
+                    return "sendDelayMs: integer expected";
             return null;
         };
 
@@ -5128,6 +5226,15 @@ export const n2n = $root.n2n = (() => {
             if (object.regularPortsChange != null)
                 if (object.regularPortsChange)
                     message.regularPortsChange = $Boolean(object.regularPortsChange);
+            if (object.mode != null)
+                if ($Number(object.mode) !== 0)
+                    message.mode = object.mode >>> 0;
+            if (object.behaviorIndex != null)
+                if ($Number(object.behaviorIndex) !== 0)
+                    message.behaviorIndex = object.behaviorIndex >>> 0;
+            if (object.sendDelayMs != null)
+                if ($Number(object.sendDelayMs) !== 0)
+                    message.sendDelayMs = object.sendDelayMs >>> 0;
             return message;
         };
 
@@ -5173,6 +5280,9 @@ export const n2n = $root.n2n = (() => {
                 object.senderBehavior = "";
                 object.portsDifference = 0;
                 object.regularPortsChange = false;
+                object.mode = 0;
+                object.behaviorIndex = 0;
+                object.sendDelayMs = 0;
             }
             if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
                 object.role = options.enums === $String ? $root.n2n.NatHoleRole[message.role] === $undefined ? message.role : $root.n2n.NatHoleRole[message.role] : message.role;
@@ -5198,6 +5308,12 @@ export const n2n = $root.n2n = (() => {
                 object.portsDifference = message.portsDifference;
             if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
                 object.regularPortsChange = message.regularPortsChange;
+            if (message.mode != null && $Object.hasOwnProperty.call(message, "mode"))
+                object.mode = message.mode;
+            if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex"))
+                object.behaviorIndex = message.behaviorIndex;
+            if (message.sendDelayMs != null && $Object.hasOwnProperty.call(message, "sendDelayMs"))
+                object.sendDelayMs = message.sendDelayMs;
             return object;
         };
 

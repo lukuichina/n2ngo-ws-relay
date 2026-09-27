@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "wrangler dev --local",
     "deploy": "wrangler deploy",
+    "build:protos": "bash scripts/build_protos.sh",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": ["n2n", "vpn", "cloudflare", "worker", "durable-objects"],
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
-    "wrangler": "^4.135.0"
+    "wrangler": "^4.135.0",
+    "protobufjs-cli": "2.7.0"
   }
 }

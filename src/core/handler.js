@@ -614,7 +614,10 @@ export class PacketHandler {
 
     console.log(`[coordinateNatHole] onlinePeers=${onlinePeers.length} eligible=${eligible.length}`);
     for (const p of eligible) {
-      console.log(`[coordinateNatHole] eligible mac=${p.macAddr} natType=${p.natType} p2pEndpoint=${p.p2pEndpoint} pubSocket=${p.pubSocket}`);
+      // observedRaddr is logged alongside pubSocket because the two diverge
+      // exactly when a NAT binds a per-destination port, which is the case
+      // where punching at pub_socket silently fails.
+      console.log(`[coordinateNatHole] eligible mac=${p.macAddr} natType=${p.natType} p2pEndpoint=${p.p2pEndpoint} pubSocket=${p.pubSocket} observedRaddr=${p.observedRaddr || "<none>"}`);
     }
 
     // Pair up eligible peers and decide roles.

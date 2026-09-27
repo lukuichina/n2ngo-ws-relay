@@ -1347,750 +1347,6 @@ export const n2n = $root.n2n = (() => {
         return RegisterResponse;
     })();
 
-    /**
-     * NatHolePunchState enum.
-     * @exports n2n.NatHolePunchState
-     * @enum {number}
-     * @property {number} PunchStateNone=0 PunchStateNone value
-     * @property {number} PunchStateInProgress=1 PunchStateInProgress value
-     * @property {number} PunchStateFailed=2 PunchStateFailed value
-     * @property {number} PunchStateSucceeded=3 PunchStateSucceeded value
-     */
-    n2n.NatHolePunchState = (function() {
-        var valuesById = {}, values = Object.create(valuesById);
-        valuesById[values.PunchStateNone = 0] = "PunchStateNone";
-        valuesById[values.PunchStateInProgress = 1] = "PunchStateInProgress";
-        valuesById[values.PunchStateFailed = 2] = "PunchStateFailed";
-        valuesById[values.PunchStateSucceeded = 3] = "PunchStateSucceeded";
-        return values;
-    })();
-
-    /**
-     * NatHoleRole enum.
-     * @name n2n.NatHoleRole
-     * @enum {number}
-     * @property {number} DetectRoleSender=0 DetectRoleSender value
-     * @property {number} DetectRoleReceiver=1 DetectRoleReceiver value
-     */
-    n2n.NatHoleRole = (function() {
-        const valuesById = $Object.create(null), values = $Object.create(valuesById);
-        values[valuesById[0] = "DetectRoleSender"] = 0;
-        values[valuesById[1] = "DetectRoleReceiver"] = 1;
-        return values;
-    })();
-
-    /**
-     * NatHolePunchResult reports the outcome of an edge's most recent
-     * hole-punch attempt so the relay can stop re-broadcasting for pairs that
-     * are up and re-arm the ones that just failed.
-     * @message n2n.NatHolePunchResult
-     * @property {number} state=1 NatHolePunchState state
-     * @property {number} attempts=2 attempts
-     * @property {string} detail=3 detail
-     */
-    n2n.NatHolePunchResult = (function() {
-        var $undefined = $util.global.undefined, $Object = $util.global.Object,
-            $TypeError = $util.global.TypeError;
-
-        var NatHolePunchResult = function(properties) {
-            if (properties)
-                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
-                        this[keys[i]] = properties[keys[i]];
-        };
-
-        NatHolePunchResult.prototype.state = 0;
-        NatHolePunchResult.prototype.attempts = 0;
-        NatHolePunchResult.prototype.detail = "";
-
-        NatHolePunchResult.encode = function(message, writer) {
-            if (!writer) writer = $Writer.create();
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
-                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.state);
-            if (message.attempts != null && $Object.hasOwnProperty.call(message, "attempts"))
-                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.attempts);
-            if (message.detail != null && $Object.hasOwnProperty.call(message, "detail") && message.detail !== "")
-                writer.uint32(/* id 3, wireType 2 =*/26).string(message.detail);
-            return writer;
-        };
-
-        NatHolePunchResult.verify = function(message) {
-            if (!$util.isObject(message))
-                throw $TypeError("NatHolePunchResult: object expected");
-            if (message.state != null && !$util.isInteger(message.state))
-                throw $TypeError("NatHolePunchResult.state: integer expected");
-            if (message.attempts != null && !$util.isInteger(message.attempts))
-                throw $TypeError("NatHolePunchResult.attempts: integer expected");
-            if (message.detail != null && !$util.isString(message.detail))
-                throw $TypeError("NatHolePunchResult.detail: string expected");
-            return message;
-        };
-
-        NatHolePunchResult.fromObject = function(object) {
-            if (object instanceof $root.n2n.NatHolePunchResult)
-                return object;
-            var message = new $root.n2n.NatHolePunchResult();
-            if (object.state != null) message.state = object.state | 0;
-            if (object.attempts != null) message.attempts = object.attempts >>> 0;
-            if (object.detail != null) message.detail = String(object.detail);
-            return message;
-        };
-
-        NatHolePunchResult.toObject = function(message, options) {
-            if (!options) options = {};
-            var object = {};
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
-                object.state = message.state;
-            if (message.attempts != null && $Object.hasOwnProperty.call(message, "attempts"))
-                object.attempts = message.attempts;
-            if (message.detail != null && $Object.hasOwnProperty.call(message, "detail"))
-                object.detail = message.detail;
-            return object;
-        };
-
-        NatHolePunchResult.decode = function(reader, length) {
-            if (!(reader instanceof $Reader)) reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length,
-                message = new $root.n2n.NatHolePunchResult();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1: message.state = reader.int32(); break;
-                case 2: message.attempts = reader.uint32(); break;
-                case 3: message.detail = reader.string(); break;
-                default: reader.skipType(tag & 7); break;
-                }
-            }
-            return message;
-        };
-
-        return NatHolePunchResult;
-    })();
-
-    n2n.NatHoleInstruction = (function() {
-
-        /**
-         * Properties of a NatHoleInstruction.
-         * @typedef {Object} n2n.NatHoleInstruction.$Properties
-         * @property {n2n.NatHoleRole|null} [role] NatHoleInstruction role
-         * @property {number|null} [portsRangeFrom] NatHoleInstruction portsRangeFrom
-         * @property {number|null} [portsRangeTo] NatHoleInstruction portsRangeTo
-         * @property {number|null} [ttl] NatHoleInstruction ttl
-         * @property {Uint8Array|null} [targetMac] NatHoleInstruction targetMac
-         * @property {Uint8Array|null} [senderMac] NatHoleInstruction senderMac
-         * @property {string|null} [senderP2pEndpoint] NatHoleInstruction senderP2pEndpoint
-         * @property {string|null} [senderPubSocket] NatHoleInstruction senderPubSocket
-         * @property {string|null} [senderNatType] NatHoleInstruction senderNatType
-         * @property {string|null} [senderBehavior] NatHoleInstruction senderBehavior
-         * @property {number|null} [portsDifference] NatHoleInstruction portsDifference
-         * @property {boolean|null} [regularPortsChange] NatHoleInstruction regularPortsChange
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
-         */
-
-        /**
-         * Properties of a NatHoleInstruction.
-         * @memberof n2n
-         * @interface INatHoleInstruction
-         * @augments n2n.NatHoleInstruction.$Properties
-         * @deprecated Use n2n.NatHoleInstruction.$Properties instead.
-         */
-
-        /**
-         * Shape of a NatHoleInstruction.
-         * @typedef {n2n.NatHoleInstruction.$Properties} n2n.NatHoleInstruction.$Shape
-         */
-
-        /**
-         * Constructs a new NatHoleInstruction.
-         * @memberof n2n
-         * @classdesc Represents a NatHoleInstruction.
-         * @constructor
-         * @param {n2n.NatHoleInstruction.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
-         */
-        const NatHoleInstruction = function (properties) {
-            if (properties)
-                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
-                        this[keys[i]] = properties[keys[i]];
-        };
-
-        /**
-         * NatHoleInstruction role.
-         * @member {n2n.NatHoleRole} role
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.role = 0;
-
-        /**
-         * NatHoleInstruction portsRangeFrom.
-         * @member {number} portsRangeFrom
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.portsRangeFrom = 0;
-
-        /**
-         * NatHoleInstruction portsRangeTo.
-         * @member {number} portsRangeTo
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.portsRangeTo = 0;
-
-        /**
-         * NatHoleInstruction ttl.
-         * @member {number} ttl
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.ttl = 0;
-
-        /**
-         * NatHoleInstruction targetMac.
-         * @member {Uint8Array} targetMac
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.targetMac = $util.newBuffer([]);
-
-        /**
-         * NatHoleInstruction senderMac.
-         * @member {Uint8Array} senderMac
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.senderMac = $util.newBuffer([]);
-
-        /**
-         * NatHoleInstruction senderP2pEndpoint.
-         * @member {string} senderP2pEndpoint
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.senderP2pEndpoint = "";
-
-        /**
-         * NatHoleInstruction senderPubSocket.
-         * @member {string} senderPubSocket
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.senderPubSocket = "";
-
-        /**
-         * NatHoleInstruction senderNatType.
-         * @member {string} senderNatType
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.senderNatType = "";
-
-        /**
-         * NatHoleInstruction senderBehavior.
-         * @member {string} senderBehavior
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.senderBehavior = "";
-
-        /**
-         * NatHoleInstruction portsDifference.
-         * @member {number} portsDifference
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.portsDifference = 0;
-
-        /**
-         * NatHoleInstruction regularPortsChange.
-         * @member {boolean} regularPortsChange
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         */
-        NatHoleInstruction.prototype.regularPortsChange = false;
-
-        /**
-         * Creates a new NatHoleInstruction instance using the specified properties.
-         * @function create
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {n2n.NatHoleInstruction.$Properties=} [properties] Properties to set
-         * @returns {n2n.NatHoleInstruction} NatHoleInstruction instance
-         * @type {{
-         *   (properties: n2n.NatHoleInstruction.$Shape): n2n.NatHoleInstruction & n2n.NatHoleInstruction.$Shape;
-         *   (properties?: n2n.NatHoleInstruction.$Properties): n2n.NatHoleInstruction;
-         * }}
-         */
-        NatHoleInstruction.create = function(properties) {
-            return new NatHoleInstruction(properties);
-        };
-
-        /**
-         * Encodes the specified NatHoleInstruction message. Does not implicitly {@link n2n.NatHoleInstruction.verify|verify} messages.
-         * @function encode
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {n2n.NatHoleInstruction.$Properties} message NatHoleInstruction message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        NatHoleInstruction.encode = function (message, writer, _depth) {
-            if (!writer)
-                writer = $Writer.create();
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                throw $Error("max depth exceeded");
-            if (message.role != null && $Object.hasOwnProperty.call(message, "role") && message.role !== 0)
-                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.role);
-            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom") && message.portsRangeFrom !== 0)
-                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.portsRangeFrom);
-            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo") && message.portsRangeTo !== 0)
-                writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.portsRangeTo);
-            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl") && message.ttl !== 0)
-                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.ttl);
-            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac") && message.targetMac.length)
-                writer.uint32(/* id 5, wireType 2 =*/42).bytes(message.targetMac);
-            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac") && message.senderMac.length)
-                writer.uint32(/* id 6, wireType 2 =*/50).bytes(message.senderMac);
-            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint") && message.senderP2pEndpoint !== "")
-                writer.uint32(/* id 7, wireType 2 =*/58).string(message.senderP2pEndpoint);
-            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket") && message.senderPubSocket !== "")
-                writer.uint32(/* id 8, wireType 2 =*/66).string(message.senderPubSocket);
-            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType") && message.senderNatType !== "")
-                writer.uint32(/* id 9, wireType 2 =*/74).string(message.senderNatType);
-            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior") && message.senderBehavior !== "")
-                writer.uint32(/* id 10, wireType 2 =*/82).string(message.senderBehavior);
-            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference") && message.portsDifference !== 0)
-                writer.uint32(/* id 11, wireType 0 =*/88).int32(message.portsDifference);
-            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange") && message.regularPortsChange !== false)
-                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.regularPortsChange);
-            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
-                for (let i = 0; i < message.$unknowns.length; ++i)
-                    writer.raw(message.$unknowns[i]);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified NatHoleInstruction message, length delimited. Does not implicitly {@link n2n.NatHoleInstruction.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {n2n.NatHoleInstruction.$Properties} message NatHoleInstruction message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        NatHoleInstruction.encodeDelimited = function(message, writer) {
-            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
-        };
-
-        /**
-         * Decodes a NatHoleInstruction message from the specified reader or buffer.
-         * @function decode
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {n2n.NatHoleInstruction & n2n.NatHoleInstruction.$Shape} NatHoleInstruction
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        NatHoleInstruction.decode = function (reader, length, _end, _depth, _target) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $Reader.recursionLimit)
-                throw $Error("max depth exceeded");
-            let end, message, value;
-            if (length === $undefined)
-                end = reader.len;
-            else {
-                end = reader.pos + length;
-                if (end > reader.len)
-                    throw $RangeError("index out of range");
-                length = reader.len;
-                reader.len = end;
-            }
-            message = _target || new $root.n2n.NatHoleInstruction();
-            while (reader.pos < end) {
-                let start = reader.pos;
-                let tag = reader.tag();
-                if (tag === _end) {
-                    _end = $undefined;
-                    break;
-                }
-                let wireType = tag & 7;
-                switch (tag >>>= 3) {
-                case 1: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.int32())
-                            message.role = value;
-                        else
-                            delete message.role;
-                        continue;
-                    }
-                case 2: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.uint32())
-                            message.portsRangeFrom = value;
-                        else
-                            delete message.portsRangeFrom;
-                        continue;
-                    }
-                case 3: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.uint32())
-                            message.portsRangeTo = value;
-                        else
-                            delete message.portsRangeTo;
-                        continue;
-                    }
-                case 4: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.uint32())
-                            message.ttl = value;
-                        else
-                            delete message.ttl;
-                        continue;
-                    }
-                case 5: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.bytes()).length)
-                            message.targetMac = value;
-                        else
-                            delete message.targetMac;
-                        continue;
-                    }
-                case 6: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.bytes()).length)
-                            message.senderMac = value;
-                        else
-                            delete message.senderMac;
-                        continue;
-                    }
-                case 7: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderP2pEndpoint = value;
-                        else
-                            delete message.senderP2pEndpoint;
-                        continue;
-                    }
-                case 8: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderPubSocket = value;
-                        else
-                            delete message.senderPubSocket;
-                        continue;
-                    }
-                case 9: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderNatType = value;
-                        else
-                            delete message.senderNatType;
-                        continue;
-                    }
-                case 10: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderBehavior = value;
-                        else
-                            delete message.senderBehavior;
-                        continue;
-                    }
-                case 11: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.int32())
-                            message.portsDifference = value;
-                        else
-                            delete message.portsDifference;
-                        continue;
-                    }
-                case 12: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.regularPortsChange = value;
-                        else
-                            delete message.regularPortsChange;
-                        continue;
-                    }
-                }
-                reader.skipType(wireType, _depth, tag);
-                if (!reader.discardUnknown) {
-                    $util.makeProp(message, "$unknowns", false);
-                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
-                }
-            }
-            if (length !== $undefined) {
-                if (reader.pos !== end)
-                    throw $RangeError("index out of range");
-                reader.len = length;
-            }
-            if (_end !== $undefined)
-                throw $Error("missing end group");
-            return message;
-        };
-
-        /**
-         * Decodes a NatHoleInstruction message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {n2n.NatHoleInstruction & n2n.NatHoleInstruction.$Shape} NatHoleInstruction
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        NatHoleInstruction.decodeDelimited = function(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a NatHoleInstruction message.
-         * @function verify
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        NatHoleInstruction.verify = function (message, _depth) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                return "max depth exceeded";
-            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
-                if (typeof message.role !== "number" || (message.role | 0) !== message.role)
-                    return "role: enum value expected";
-            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
-                if (!$util.isInteger(message.portsRangeFrom))
-                    return "portsRangeFrom: integer expected";
-            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
-                if (!$util.isInteger(message.portsRangeTo))
-                    return "portsRangeTo: integer expected";
-            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
-                if (!$util.isInteger(message.ttl))
-                    return "ttl: integer expected";
-            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
-                if (!(message.targetMac && typeof message.targetMac.length === "number" || $util.isString(message.targetMac)))
-                    return "targetMac: buffer expected";
-            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
-                if (!(message.senderMac && typeof message.senderMac.length === "number" || $util.isString(message.senderMac)))
-                    return "senderMac: buffer expected";
-            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
-                if (!$util.isString(message.senderP2pEndpoint))
-                    return "senderP2pEndpoint: string expected";
-            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
-                if (!$util.isString(message.senderPubSocket))
-                    return "senderPubSocket: string expected";
-            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
-                if (!$util.isString(message.senderNatType))
-                    return "senderNatType: string expected";
-            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
-                if (!$util.isString(message.senderBehavior))
-                    return "senderBehavior: string expected";
-            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
-                if (!$util.isInteger(message.portsDifference))
-                    return "portsDifference: integer expected";
-            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
-                if (typeof message.regularPortsChange !== "boolean")
-                    return "regularPortsChange: boolean expected";
-            return null;
-        };
-
-        /**
-         * Creates a NatHoleInstruction message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {n2n.NatHoleInstruction} NatHoleInstruction
-         */
-        NatHoleInstruction.fromObject = function (object, _depth) {
-            if (object instanceof $root.n2n.NatHoleInstruction)
-                return object;
-            if (!$util.isObject(object))
-                throw $TypeError(".n2n.NatHoleInstruction: object expected");
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                throw $Error("max depth exceeded");
-            let message = new $root.n2n.NatHoleInstruction();
-            if (object.role !== 0 && (typeof object.role !== "string" || $root.n2n.NatHoleRole[object.role] !== 0))
-                switch (object.role) {
-                case "DetectRoleSender":
-                case 0:
-                    message.role = 0;
-                    break;
-                case "DetectRoleReceiver":
-                case 1:
-                    message.role = 1;
-                    break;
-                default:
-                    if (typeof object.role === "number" && (object.role | 0) === object.role)
-                        message.role = object.role;
-                }
-            if (object.portsRangeFrom != null)
-                if ($Number(object.portsRangeFrom) !== 0)
-                    message.portsRangeFrom = object.portsRangeFrom >>> 0;
-            if (object.portsRangeTo != null)
-                if ($Number(object.portsRangeTo) !== 0)
-                    message.portsRangeTo = object.portsRangeTo >>> 0;
-            if (object.ttl != null)
-                if ($Number(object.ttl) !== 0)
-                    message.ttl = object.ttl >>> 0;
-            if (object.targetMac != null)
-                if (object.targetMac.length)
-                    if (typeof object.targetMac === "string")
-                        $util.base64.decode(object.targetMac, message.targetMac = $util.newBuffer($util.base64.length(object.targetMac)), 0);
-                    else if (object.targetMac.length >= 0)
-                        message.targetMac = object.targetMac;
-            if (object.senderMac != null)
-                if (object.senderMac.length)
-                    if (typeof object.senderMac === "string")
-                        $util.base64.decode(object.senderMac, message.senderMac = $util.newBuffer($util.base64.length(object.senderMac)), 0);
-                    else if (object.senderMac.length >= 0)
-                        message.senderMac = object.senderMac;
-            if (object.senderP2pEndpoint != null)
-                if (typeof object.senderP2pEndpoint !== "string" || object.senderP2pEndpoint.length)
-                    message.senderP2pEndpoint = $String(object.senderP2pEndpoint);
-            if (object.senderPubSocket != null)
-                if (typeof object.senderPubSocket !== "string" || object.senderPubSocket.length)
-                    message.senderPubSocket = $String(object.senderPubSocket);
-            if (object.senderNatType != null)
-                if (typeof object.senderNatType !== "string" || object.senderNatType.length)
-                    message.senderNatType = $String(object.senderNatType);
-            if (object.senderBehavior != null)
-                if (typeof object.senderBehavior !== "string" || object.senderBehavior.length)
-                    message.senderBehavior = $String(object.senderBehavior);
-            if (object.portsDifference != null)
-                if ($Number(object.portsDifference) !== 0)
-                    message.portsDifference = object.portsDifference | 0;
-            if (object.regularPortsChange != null)
-                if (object.regularPortsChange)
-                    message.regularPortsChange = $Boolean(object.regularPortsChange);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a NatHoleInstruction message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {n2n.NatHoleInstruction} message NatHoleInstruction
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        NatHoleInstruction.toObject = function (message, options, _depth) {
-            if (!options)
-                options = {};
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                throw $Error("max depth exceeded");
-            let object = {};
-            if (options.defaults) {
-                object.role = options.enums === $String ? "DetectRoleSender" : 0;
-                object.portsRangeFrom = 0;
-                object.portsRangeTo = 0;
-                object.ttl = 0;
-                if (options.bytes === $String)
-                    object.targetMac = "";
-                else {
-                    object.targetMac = [];
-                    if (options.bytes !== $Array)
-                        object.targetMac = $util.newBuffer(object.targetMac);
-                }
-                if (options.bytes === $String)
-                    object.senderMac = "";
-                else {
-                    object.senderMac = [];
-                    if (options.bytes !== $Array)
-                        object.senderMac = $util.newBuffer(object.senderMac);
-                }
-                object.senderP2pEndpoint = "";
-                object.senderPubSocket = "";
-                object.senderNatType = "";
-                object.senderBehavior = "";
-                object.portsDifference = 0;
-                object.regularPortsChange = false;
-            }
-            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
-                object.role = options.enums === $String ? $root.n2n.NatHoleRole[message.role] === $undefined ? message.role : $root.n2n.NatHoleRole[message.role] : message.role;
-            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
-                object.portsRangeFrom = message.portsRangeFrom;
-            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
-                object.portsRangeTo = message.portsRangeTo;
-            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
-                object.ttl = message.ttl;
-            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
-                object.targetMac = options.bytes === $String ? $util.base64.encode(message.targetMac, 0, message.targetMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.targetMac) : message.targetMac;
-            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
-                object.senderMac = options.bytes === $String ? $util.base64.encode(message.senderMac, 0, message.senderMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.senderMac) : message.senderMac;
-            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
-                object.senderP2pEndpoint = message.senderP2pEndpoint;
-            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
-                object.senderPubSocket = message.senderPubSocket;
-            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
-                object.senderNatType = message.senderNatType;
-            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
-                object.senderBehavior = message.senderBehavior;
-            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
-                object.portsDifference = message.portsDifference;
-            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
-                object.regularPortsChange = message.regularPortsChange;
-            return object;
-        };
-
-        /**
-         * Converts this NatHoleInstruction to JSON.
-         * @function toJSON
-         * @memberof n2n.NatHoleInstruction
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        NatHoleInstruction.prototype.toJSON = function() {
-            return NatHoleInstruction.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        /**
-         * Gets the type url for NatHoleInstruction
-         * @function getTypeUrl
-         * @memberof n2n.NatHoleInstruction
-         * @static
-         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns {string} The type url
-         */
-        NatHoleInstruction.getTypeUrl = function(prefix) {
-            if (prefix === $undefined)
-                prefix = "type.googleapis.com";
-            return prefix + "/n2n.NatHoleInstruction";
-        };
-
-        return NatHoleInstruction;
-    })();
-
     n2n.PeerInfo = (function() {
 
         /**
@@ -2106,6 +1362,9 @@ export const n2n = $root.n2n = (() => {
          * @property {string|null} [natType] PeerInfo natType
          * @property {number|Long|null} [lastSeen] PeerInfo lastSeen
          * @property {n2n.NatHoleInstruction.$Properties|null} [natHoleInstruction] PeerInfo natHoleInstruction
+         * @property {string|null} [observedRaddr] PeerInfo observedRaddr
+         * @property {n2n.NatHolePunchResult.$Properties|null} [punchResult] PeerInfo punchResult
+         * @property {string|null} [punchResultPeerMac] PeerInfo punchResultPeerMac
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -2219,9 +1478,18 @@ export const n2n = $root.n2n = (() => {
         PeerInfo.prototype.natHoleInstruction = null;
 
         /**
-         * PeerInfo punchResult.
-         * @member {n2n.NatHolePunchResult|null} punchResult
+         * PeerInfo observedRaddr.
+         * @member {string} observedRaddr
          * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.observedRaddr = "";
+
+        /**
+         * PeerInfo punchResult.
+         * @member {n2n.NatHolePunchResult.$Properties|null|undefined} punchResult
+         * @memberof n2n.PeerInfo
+         * @instance
          */
         PeerInfo.prototype.punchResult = null;
 
@@ -2229,6 +1497,7 @@ export const n2n = $root.n2n = (() => {
          * PeerInfo punchResultPeerMac.
          * @member {string} punchResultPeerMac
          * @memberof n2n.PeerInfo
+         * @instance
          */
         PeerInfo.prototype.punchResultPeerMac = "";
 
@@ -2285,6 +1554,8 @@ export const n2n = $root.n2n = (() => {
                 writer.uint32(/* id 9, wireType 0 =*/72).uint64(message.lastSeen);
             if (message.natHoleInstruction != null && $Object.hasOwnProperty.call(message, "natHoleInstruction"))
                 $root.n2n.NatHoleInstruction.encode(message.natHoleInstruction, writer.uint32(/* id 10, wireType 2 =*/82).fork(), _depth + 1).ldelim();
+            if (message.observedRaddr != null && $Object.hasOwnProperty.call(message, "observedRaddr") && message.observedRaddr !== "")
+                writer.uint32(/* id 11, wireType 2 =*/90).string(message.observedRaddr);
             if (message.punchResult != null && $Object.hasOwnProperty.call(message, "punchResult"))
                 $root.n2n.NatHolePunchResult.encode(message.punchResult, writer.uint32(/* id 12, wireType 2 =*/98).fork(), _depth + 1).ldelim();
             if (message.punchResultPeerMac != null && $Object.hasOwnProperty.call(message, "punchResultPeerMac") && message.punchResultPeerMac !== "")
@@ -2432,6 +1703,15 @@ export const n2n = $root.n2n = (() => {
                         message.natHoleInstruction = $root.n2n.NatHoleInstruction.decode(reader, reader.uint32(), $undefined, _depth + 1, message.natHoleInstruction);
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.observedRaddr = value;
+                        else
+                            delete message.observedRaddr;
+                        continue;
+                    }
                 case 12: {
                         if (wireType !== 2)
                             break;
@@ -2441,7 +1721,10 @@ export const n2n = $root.n2n = (() => {
                 case 13: {
                         if (wireType !== 2)
                             break;
-                        message.punchResultPeerMac = reader.string();
+                        if ((value = reader.stringVerify()).length)
+                            message.punchResultPeerMac = value;
+                        else
+                            delete message.punchResultPeerMac;
                         continue;
                     }
                 }
@@ -2528,6 +1811,17 @@ export const n2n = $root.n2n = (() => {
                 if (error)
                     return "natHoleInstruction." + error;
             }
+            if (message.observedRaddr != null && $Object.hasOwnProperty.call(message, "observedRaddr"))
+                if (!$util.isString(message.observedRaddr))
+                    return "observedRaddr: string expected";
+            if (message.punchResult != null && $Object.hasOwnProperty.call(message, "punchResult")) {
+                let error = $root.n2n.NatHolePunchResult.verify(message.punchResult, _depth + 1);
+                if (error)
+                    return "punchResult." + error;
+            }
+            if (message.punchResultPeerMac != null && $Object.hasOwnProperty.call(message, "punchResultPeerMac"))
+                if (!$util.isString(message.punchResultPeerMac))
+                    return "punchResultPeerMac: string expected";
             return null;
         };
 
@@ -2595,13 +1889,17 @@ export const n2n = $root.n2n = (() => {
                     throw $TypeError(".n2n.PeerInfo.natHoleInstruction: object expected");
                 message.natHoleInstruction = $root.n2n.NatHoleInstruction.fromObject(object.natHoleInstruction, _depth + 1);
             }
+            if (object.observedRaddr != null)
+                if (typeof object.observedRaddr !== "string" || object.observedRaddr.length)
+                    message.observedRaddr = $String(object.observedRaddr);
             if (object.punchResult != null) {
                 if (!$util.isObject(object.punchResult))
                     throw $TypeError(".n2n.PeerInfo.punchResult: object expected");
-                message.punchResult = $root.n2n.NatHolePunchResult.fromObject(object.punchResult);
+                message.punchResult = $root.n2n.NatHolePunchResult.fromObject(object.punchResult, _depth + 1);
             }
             if (object.punchResultPeerMac != null)
-                message.punchResultPeerMac = String(object.punchResultPeerMac);
+                if (typeof object.punchResultPeerMac !== "string" || object.punchResultPeerMac.length)
+                    message.punchResultPeerMac = $String(object.punchResultPeerMac);
             return message;
         };
 
@@ -2644,6 +1942,9 @@ export const n2n = $root.n2n = (() => {
                 } else
                     object.lastSeen = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.natHoleInstruction = null;
+                object.observedRaddr = "";
+                object.punchResult = null;
+                object.punchResultPeerMac = "";
             }
             if (message.virtualIp != null && $Object.hasOwnProperty.call(message, "virtualIp"))
                 object.virtualIp = message.virtualIp;
@@ -2673,9 +1974,12 @@ export const n2n = $root.n2n = (() => {
                     object.lastSeen = options.longs === $String ? $util.Long.prototype.toString.call(message.lastSeen) : options.longs === $Number ? new $util.LongBits(message.lastSeen.low >>> 0, message.lastSeen.high >>> 0).toNumber(true) : message.lastSeen;
             if (message.natHoleInstruction != null && $Object.hasOwnProperty.call(message, "natHoleInstruction"))
                 object.natHoleInstruction = $root.n2n.NatHoleInstruction.toObject(message.natHoleInstruction, options, _depth + 1);
+            if (message.observedRaddr != null && $Object.hasOwnProperty.call(message, "observedRaddr"))
+                object.observedRaddr = message.observedRaddr;
             if (message.punchResult != null && $Object.hasOwnProperty.call(message, "punchResult"))
-                object.punchResult = $root.n2n.NatHolePunchResult.toObject(message.punchResult, options);
-            object.punchResultPeerMac = $util.emptyDefault ? "" : message.punchResultPeerMac;
+                object.punchResult = $root.n2n.NatHolePunchResult.toObject(message.punchResult, options, _depth + 1);
+            if (message.punchResultPeerMac != null && $Object.hasOwnProperty.call(message, "punchResultPeerMac"))
+                object.punchResultPeerMac = message.punchResultPeerMac;
             return object;
         };
 
@@ -2705,6 +2009,377 @@ export const n2n = $root.n2n = (() => {
         };
 
         return PeerInfo;
+    })();
+
+    /**
+     * NatHolePunchState enum.
+     * @name n2n.NatHolePunchState
+     * @enum {number}
+     * @property {number} PunchStateNone=0 PunchStateNone value
+     * @property {number} PunchStateInProgress=1 PunchStateInProgress value
+     * @property {number} PunchStateFailed=2 PunchStateFailed value
+     * @property {number} PunchStateSucceeded=3 PunchStateSucceeded value
+     */
+    n2n.NatHolePunchState = (function() {
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
+        values[valuesById[0] = "PunchStateNone"] = 0;
+        values[valuesById[1] = "PunchStateInProgress"] = 1;
+        values[valuesById[2] = "PunchStateFailed"] = 2;
+        values[valuesById[3] = "PunchStateSucceeded"] = 3;
+        return values;
+    })();
+
+    n2n.NatHolePunchResult = (function() {
+
+        /**
+         * Properties of a NatHolePunchResult.
+         * @typedef {Object} n2n.NatHolePunchResult.$Properties
+         * @property {n2n.NatHolePunchState|null} [state] NatHolePunchResult state
+         * @property {number|null} [attempts] NatHolePunchResult attempts
+         * @property {string|null} [detail] NatHolePunchResult detail
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a NatHolePunchResult.
+         * @memberof n2n
+         * @interface INatHolePunchResult
+         * @augments n2n.NatHolePunchResult.$Properties
+         * @deprecated Use n2n.NatHolePunchResult.$Properties instead.
+         */
+
+        /**
+         * Shape of a NatHolePunchResult.
+         * @typedef {n2n.NatHolePunchResult.$Properties} n2n.NatHolePunchResult.$Shape
+         */
+
+        /**
+         * Constructs a new NatHolePunchResult.
+         * @memberof n2n
+         * @classdesc Represents a NatHolePunchResult.
+         * @constructor
+         * @param {n2n.NatHolePunchResult.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const NatHolePunchResult = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * NatHolePunchResult state.
+         * @member {n2n.NatHolePunchState} state
+         * @memberof n2n.NatHolePunchResult
+         * @instance
+         */
+        NatHolePunchResult.prototype.state = 0;
+
+        /**
+         * NatHolePunchResult attempts.
+         * @member {number} attempts
+         * @memberof n2n.NatHolePunchResult
+         * @instance
+         */
+        NatHolePunchResult.prototype.attempts = 0;
+
+        /**
+         * NatHolePunchResult detail.
+         * @member {string} detail
+         * @memberof n2n.NatHolePunchResult
+         * @instance
+         */
+        NatHolePunchResult.prototype.detail = "";
+
+        /**
+         * Creates a new NatHolePunchResult instance using the specified properties.
+         * @function create
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {n2n.NatHolePunchResult.$Properties=} [properties] Properties to set
+         * @returns {n2n.NatHolePunchResult} NatHolePunchResult instance
+         * @type {{
+         *   (properties: n2n.NatHolePunchResult.$Shape): n2n.NatHolePunchResult & n2n.NatHolePunchResult.$Shape;
+         *   (properties?: n2n.NatHolePunchResult.$Properties): n2n.NatHolePunchResult;
+         * }}
+         */
+        NatHolePunchResult.create = function(properties) {
+            return new NatHolePunchResult(properties);
+        };
+
+        /**
+         * Encodes the specified NatHolePunchResult message. Does not implicitly {@link n2n.NatHolePunchResult.verify|verify} messages.
+         * @function encode
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {n2n.NatHolePunchResult.$Properties} message NatHolePunchResult message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        NatHolePunchResult.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== 0)
+                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.state);
+            if (message.attempts != null && $Object.hasOwnProperty.call(message, "attempts") && message.attempts !== 0)
+                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.attempts);
+            if (message.detail != null && $Object.hasOwnProperty.call(message, "detail") && message.detail !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.detail);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified NatHolePunchResult message, length delimited. Does not implicitly {@link n2n.NatHolePunchResult.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {n2n.NatHolePunchResult.$Properties} message NatHolePunchResult message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        NatHolePunchResult.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a NatHolePunchResult message from the specified reader or buffer.
+         * @function decode
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {n2n.NatHolePunchResult & n2n.NatHolePunchResult.$Shape} NatHolePunchResult
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        NatHolePunchResult.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.n2n.NatHolePunchResult();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.state = value;
+                        else
+                            delete message.state;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.attempts = value;
+                        else
+                            delete message.attempts;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.detail = value;
+                        else
+                            delete message.detail;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a NatHolePunchResult message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {n2n.NatHolePunchResult & n2n.NatHolePunchResult.$Shape} NatHolePunchResult
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        NatHolePunchResult.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a NatHolePunchResult message.
+         * @function verify
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        NatHolePunchResult.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                if (typeof message.state !== "number" || (message.state | 0) !== message.state)
+                    return "state: enum value expected";
+            if (message.attempts != null && $Object.hasOwnProperty.call(message, "attempts"))
+                if (!$util.isInteger(message.attempts))
+                    return "attempts: integer expected";
+            if (message.detail != null && $Object.hasOwnProperty.call(message, "detail"))
+                if (!$util.isString(message.detail))
+                    return "detail: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a NatHolePunchResult message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {n2n.NatHolePunchResult} NatHolePunchResult
+         */
+        NatHolePunchResult.fromObject = function (object, _depth) {
+            if (object instanceof $root.n2n.NatHolePunchResult)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".n2n.NatHolePunchResult: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.n2n.NatHolePunchResult();
+            if (object.state !== 0 && (typeof object.state !== "string" || $root.n2n.NatHolePunchState[object.state] !== 0))
+                switch (object.state) {
+                case "PunchStateNone":
+                case 0:
+                    message.state = 0;
+                    break;
+                case "PunchStateInProgress":
+                case 1:
+                    message.state = 1;
+                    break;
+                case "PunchStateFailed":
+                case 2:
+                    message.state = 2;
+                    break;
+                case "PunchStateSucceeded":
+                case 3:
+                    message.state = 3;
+                    break;
+                default:
+                    if (typeof object.state === "number" && (object.state | 0) === object.state)
+                        message.state = object.state;
+                }
+            if (object.attempts != null)
+                if ($Number(object.attempts) !== 0)
+                    message.attempts = object.attempts >>> 0;
+            if (object.detail != null)
+                if (typeof object.detail !== "string" || object.detail.length)
+                    message.detail = $String(object.detail);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a NatHolePunchResult message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {n2n.NatHolePunchResult} message NatHolePunchResult
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        NatHolePunchResult.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.state = options.enums === $String ? "PunchStateNone" : 0;
+                object.attempts = 0;
+                object.detail = "";
+            }
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                object.state = options.enums === $String ? $root.n2n.NatHolePunchState[message.state] === $undefined ? message.state : $root.n2n.NatHolePunchState[message.state] : message.state;
+            if (message.attempts != null && $Object.hasOwnProperty.call(message, "attempts"))
+                object.attempts = message.attempts;
+            if (message.detail != null && $Object.hasOwnProperty.call(message, "detail"))
+                object.detail = message.detail;
+            return object;
+        };
+
+        /**
+         * Converts this NatHolePunchResult to JSON.
+         * @function toJSON
+         * @memberof n2n.NatHolePunchResult
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        NatHolePunchResult.prototype.toJSON = function() {
+            return NatHolePunchResult.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for NatHolePunchResult
+         * @function getTypeUrl
+         * @memberof n2n.NatHolePunchResult
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        NatHolePunchResult.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/n2n.NatHolePunchResult";
+        };
+
+        return NatHolePunchResult;
     })();
 
     n2n.PeerInfoList = (function() {
@@ -4290,6 +3965,1268 @@ export const n2n = $root.n2n = (() => {
         };
 
         return PeerCachedInfo;
+    })();
+
+    /**
+     * NatHoleRole enum.
+     * @name n2n.NatHoleRole
+     * @enum {number}
+     * @property {number} DetectRoleSender=0 DetectRoleSender value
+     * @property {number} DetectRoleReceiver=1 DetectRoleReceiver value
+     */
+    n2n.NatHoleRole = (function() {
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
+        values[valuesById[0] = "DetectRoleSender"] = 0;
+        values[valuesById[1] = "DetectRoleReceiver"] = 1;
+        return values;
+    })();
+
+    n2n.NatHole = (function() {
+
+        /**
+         * Properties of a NatHole.
+         * @typedef {Object} n2n.NatHole.$Properties
+         * @property {n2n.NatHoleRole|null} [role] NatHole role
+         * @property {number|null} [portsRangeFrom] NatHole portsRangeFrom
+         * @property {number|null} [portsRangeTo] NatHole portsRangeTo
+         * @property {number|null} [ttl] NatHole ttl
+         * @property {Uint8Array|null} [targetMac] NatHole targetMac
+         * @property {Uint8Array|null} [senderMac] NatHole senderMac
+         * @property {string|null} [senderP2pEndpoint] NatHole senderP2pEndpoint
+         * @property {string|null} [senderPubSocket] NatHole senderPubSocket
+         * @property {string|null} [senderNatType] NatHole senderNatType
+         * @property {string|null} [senderBehavior] NatHole senderBehavior
+         * @property {number|null} [portsDifference] NatHole portsDifference
+         * @property {boolean|null} [regularPortsChange] NatHole regularPortsChange
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a NatHole.
+         * @memberof n2n
+         * @interface INatHole
+         * @augments n2n.NatHole.$Properties
+         * @deprecated Use n2n.NatHole.$Properties instead.
+         */
+
+        /**
+         * Shape of a NatHole.
+         * @typedef {n2n.NatHole.$Properties} n2n.NatHole.$Shape
+         */
+
+        /**
+         * Constructs a new NatHole.
+         * @memberof n2n
+         * @classdesc Represents a NatHole.
+         * @constructor
+         * @param {n2n.NatHole.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const NatHole = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * NatHole role.
+         * @member {n2n.NatHoleRole} role
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.role = 0;
+
+        /**
+         * NatHole portsRangeFrom.
+         * @member {number} portsRangeFrom
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.portsRangeFrom = 0;
+
+        /**
+         * NatHole portsRangeTo.
+         * @member {number} portsRangeTo
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.portsRangeTo = 0;
+
+        /**
+         * NatHole ttl.
+         * @member {number} ttl
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.ttl = 0;
+
+        /**
+         * NatHole targetMac.
+         * @member {Uint8Array} targetMac
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.targetMac = $util.newBuffer([]);
+
+        /**
+         * NatHole senderMac.
+         * @member {Uint8Array} senderMac
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.senderMac = $util.newBuffer([]);
+
+        /**
+         * NatHole senderP2pEndpoint.
+         * @member {string} senderP2pEndpoint
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.senderP2pEndpoint = "";
+
+        /**
+         * NatHole senderPubSocket.
+         * @member {string} senderPubSocket
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.senderPubSocket = "";
+
+        /**
+         * NatHole senderNatType.
+         * @member {string} senderNatType
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.senderNatType = "";
+
+        /**
+         * NatHole senderBehavior.
+         * @member {string} senderBehavior
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.senderBehavior = "";
+
+        /**
+         * NatHole portsDifference.
+         * @member {number} portsDifference
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.portsDifference = 0;
+
+        /**
+         * NatHole regularPortsChange.
+         * @member {boolean} regularPortsChange
+         * @memberof n2n.NatHole
+         * @instance
+         */
+        NatHole.prototype.regularPortsChange = false;
+
+        /**
+         * Creates a new NatHole instance using the specified properties.
+         * @function create
+         * @memberof n2n.NatHole
+         * @static
+         * @param {n2n.NatHole.$Properties=} [properties] Properties to set
+         * @returns {n2n.NatHole} NatHole instance
+         * @type {{
+         *   (properties: n2n.NatHole.$Shape): n2n.NatHole & n2n.NatHole.$Shape;
+         *   (properties?: n2n.NatHole.$Properties): n2n.NatHole;
+         * }}
+         */
+        NatHole.create = function(properties) {
+            return new NatHole(properties);
+        };
+
+        /**
+         * Encodes the specified NatHole message. Does not implicitly {@link n2n.NatHole.verify|verify} messages.
+         * @function encode
+         * @memberof n2n.NatHole
+         * @static
+         * @param {n2n.NatHole.$Properties} message NatHole message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        NatHole.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role") && message.role !== 0)
+                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.role);
+            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom") && message.portsRangeFrom !== 0)
+                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.portsRangeFrom);
+            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo") && message.portsRangeTo !== 0)
+                writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.portsRangeTo);
+            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl") && message.ttl !== 0)
+                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.ttl);
+            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac") && message.targetMac.length)
+                writer.uint32(/* id 5, wireType 2 =*/42).bytes(message.targetMac);
+            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac") && message.senderMac.length)
+                writer.uint32(/* id 6, wireType 2 =*/50).bytes(message.senderMac);
+            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint") && message.senderP2pEndpoint !== "")
+                writer.uint32(/* id 7, wireType 2 =*/58).string(message.senderP2pEndpoint);
+            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket") && message.senderPubSocket !== "")
+                writer.uint32(/* id 8, wireType 2 =*/66).string(message.senderPubSocket);
+            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType") && message.senderNatType !== "")
+                writer.uint32(/* id 9, wireType 2 =*/74).string(message.senderNatType);
+            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior") && message.senderBehavior !== "")
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.senderBehavior);
+            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference") && message.portsDifference !== 0)
+                writer.uint32(/* id 11, wireType 0 =*/88).int32(message.portsDifference);
+            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange") && message.regularPortsChange !== false)
+                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.regularPortsChange);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified NatHole message, length delimited. Does not implicitly {@link n2n.NatHole.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof n2n.NatHole
+         * @static
+         * @param {n2n.NatHole.$Properties} message NatHole message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        NatHole.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a NatHole message from the specified reader or buffer.
+         * @function decode
+         * @memberof n2n.NatHole
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {n2n.NatHole & n2n.NatHole.$Shape} NatHole
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        NatHole.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.n2n.NatHole();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.role = value;
+                        else
+                            delete message.role;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.portsRangeFrom = value;
+                        else
+                            delete message.portsRangeFrom;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.portsRangeTo = value;
+                        else
+                            delete message.portsRangeTo;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.ttl = value;
+                        else
+                            delete message.ttl;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.bytes()).length)
+                            message.targetMac = value;
+                        else
+                            delete message.targetMac;
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.bytes()).length)
+                            message.senderMac = value;
+                        else
+                            delete message.senderMac;
+                        continue;
+                    }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderP2pEndpoint = value;
+                        else
+                            delete message.senderP2pEndpoint;
+                        continue;
+                    }
+                case 8: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderPubSocket = value;
+                        else
+                            delete message.senderPubSocket;
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderNatType = value;
+                        else
+                            delete message.senderNatType;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderBehavior = value;
+                        else
+                            delete message.senderBehavior;
+                        continue;
+                    }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.portsDifference = value;
+                        else
+                            delete message.portsDifference;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.regularPortsChange = value;
+                        else
+                            delete message.regularPortsChange;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a NatHole message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof n2n.NatHole
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {n2n.NatHole & n2n.NatHole.$Shape} NatHole
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        NatHole.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a NatHole message.
+         * @function verify
+         * @memberof n2n.NatHole
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        NatHole.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
+                if (typeof message.role !== "number" || (message.role | 0) !== message.role)
+                    return "role: enum value expected";
+            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
+                if (!$util.isInteger(message.portsRangeFrom))
+                    return "portsRangeFrom: integer expected";
+            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
+                if (!$util.isInteger(message.portsRangeTo))
+                    return "portsRangeTo: integer expected";
+            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
+                if (!$util.isInteger(message.ttl))
+                    return "ttl: integer expected";
+            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
+                if (!(message.targetMac && typeof message.targetMac.length === "number" || $util.isString(message.targetMac)))
+                    return "targetMac: buffer expected";
+            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
+                if (!(message.senderMac && typeof message.senderMac.length === "number" || $util.isString(message.senderMac)))
+                    return "senderMac: buffer expected";
+            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
+                if (!$util.isString(message.senderP2pEndpoint))
+                    return "senderP2pEndpoint: string expected";
+            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
+                if (!$util.isString(message.senderPubSocket))
+                    return "senderPubSocket: string expected";
+            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
+                if (!$util.isString(message.senderNatType))
+                    return "senderNatType: string expected";
+            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
+                if (!$util.isString(message.senderBehavior))
+                    return "senderBehavior: string expected";
+            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
+                if (!$util.isInteger(message.portsDifference))
+                    return "portsDifference: integer expected";
+            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
+                if (typeof message.regularPortsChange !== "boolean")
+                    return "regularPortsChange: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a NatHole message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof n2n.NatHole
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {n2n.NatHole} NatHole
+         */
+        NatHole.fromObject = function (object, _depth) {
+            if (object instanceof $root.n2n.NatHole)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".n2n.NatHole: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.n2n.NatHole();
+            if (object.role !== 0 && (typeof object.role !== "string" || $root.n2n.NatHoleRole[object.role] !== 0))
+                switch (object.role) {
+                case "DetectRoleSender":
+                case 0:
+                    message.role = 0;
+                    break;
+                case "DetectRoleReceiver":
+                case 1:
+                    message.role = 1;
+                    break;
+                default:
+                    if (typeof object.role === "number" && (object.role | 0) === object.role)
+                        message.role = object.role;
+                }
+            if (object.portsRangeFrom != null)
+                if ($Number(object.portsRangeFrom) !== 0)
+                    message.portsRangeFrom = object.portsRangeFrom >>> 0;
+            if (object.portsRangeTo != null)
+                if ($Number(object.portsRangeTo) !== 0)
+                    message.portsRangeTo = object.portsRangeTo >>> 0;
+            if (object.ttl != null)
+                if ($Number(object.ttl) !== 0)
+                    message.ttl = object.ttl >>> 0;
+            if (object.targetMac != null)
+                if (object.targetMac.length)
+                    if (typeof object.targetMac === "string")
+                        $util.base64.decode(object.targetMac, message.targetMac = $util.newBuffer($util.base64.length(object.targetMac)), 0);
+                    else if (object.targetMac.length >= 0)
+                        message.targetMac = object.targetMac;
+            if (object.senderMac != null)
+                if (object.senderMac.length)
+                    if (typeof object.senderMac === "string")
+                        $util.base64.decode(object.senderMac, message.senderMac = $util.newBuffer($util.base64.length(object.senderMac)), 0);
+                    else if (object.senderMac.length >= 0)
+                        message.senderMac = object.senderMac;
+            if (object.senderP2pEndpoint != null)
+                if (typeof object.senderP2pEndpoint !== "string" || object.senderP2pEndpoint.length)
+                    message.senderP2pEndpoint = $String(object.senderP2pEndpoint);
+            if (object.senderPubSocket != null)
+                if (typeof object.senderPubSocket !== "string" || object.senderPubSocket.length)
+                    message.senderPubSocket = $String(object.senderPubSocket);
+            if (object.senderNatType != null)
+                if (typeof object.senderNatType !== "string" || object.senderNatType.length)
+                    message.senderNatType = $String(object.senderNatType);
+            if (object.senderBehavior != null)
+                if (typeof object.senderBehavior !== "string" || object.senderBehavior.length)
+                    message.senderBehavior = $String(object.senderBehavior);
+            if (object.portsDifference != null)
+                if ($Number(object.portsDifference) !== 0)
+                    message.portsDifference = object.portsDifference | 0;
+            if (object.regularPortsChange != null)
+                if (object.regularPortsChange)
+                    message.regularPortsChange = $Boolean(object.regularPortsChange);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a NatHole message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof n2n.NatHole
+         * @static
+         * @param {n2n.NatHole} message NatHole
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        NatHole.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.role = options.enums === $String ? "DetectRoleSender" : 0;
+                object.portsRangeFrom = 0;
+                object.portsRangeTo = 0;
+                object.ttl = 0;
+                if (options.bytes === $String)
+                    object.targetMac = "";
+                else {
+                    object.targetMac = [];
+                    if (options.bytes !== $Array)
+                        object.targetMac = $util.newBuffer(object.targetMac);
+                }
+                if (options.bytes === $String)
+                    object.senderMac = "";
+                else {
+                    object.senderMac = [];
+                    if (options.bytes !== $Array)
+                        object.senderMac = $util.newBuffer(object.senderMac);
+                }
+                object.senderP2pEndpoint = "";
+                object.senderPubSocket = "";
+                object.senderNatType = "";
+                object.senderBehavior = "";
+                object.portsDifference = 0;
+                object.regularPortsChange = false;
+            }
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
+                object.role = options.enums === $String ? $root.n2n.NatHoleRole[message.role] === $undefined ? message.role : $root.n2n.NatHoleRole[message.role] : message.role;
+            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
+                object.portsRangeFrom = message.portsRangeFrom;
+            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
+                object.portsRangeTo = message.portsRangeTo;
+            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
+                object.ttl = message.ttl;
+            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
+                object.targetMac = options.bytes === $String ? $util.base64.encode(message.targetMac, 0, message.targetMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.targetMac) : message.targetMac;
+            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
+                object.senderMac = options.bytes === $String ? $util.base64.encode(message.senderMac, 0, message.senderMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.senderMac) : message.senderMac;
+            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
+                object.senderP2pEndpoint = message.senderP2pEndpoint;
+            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
+                object.senderPubSocket = message.senderPubSocket;
+            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
+                object.senderNatType = message.senderNatType;
+            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
+                object.senderBehavior = message.senderBehavior;
+            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
+                object.portsDifference = message.portsDifference;
+            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
+                object.regularPortsChange = message.regularPortsChange;
+            return object;
+        };
+
+        /**
+         * Converts this NatHole to JSON.
+         * @function toJSON
+         * @memberof n2n.NatHole
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        NatHole.prototype.toJSON = function() {
+            return NatHole.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for NatHole
+         * @function getTypeUrl
+         * @memberof n2n.NatHole
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        NatHole.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/n2n.NatHole";
+        };
+
+        return NatHole;
+    })();
+
+    n2n.NatHoleInstruction = (function() {
+
+        /**
+         * Properties of a NatHoleInstruction.
+         * @typedef {Object} n2n.NatHoleInstruction.$Properties
+         * @property {n2n.NatHoleRole|null} [role] NatHoleInstruction role
+         * @property {number|null} [portsRangeFrom] NatHoleInstruction portsRangeFrom
+         * @property {number|null} [portsRangeTo] NatHoleInstruction portsRangeTo
+         * @property {number|null} [ttl] NatHoleInstruction ttl
+         * @property {Uint8Array|null} [targetMac] NatHoleInstruction targetMac
+         * @property {Uint8Array|null} [senderMac] NatHoleInstruction senderMac
+         * @property {string|null} [senderP2pEndpoint] NatHoleInstruction senderP2pEndpoint
+         * @property {string|null} [senderPubSocket] NatHoleInstruction senderPubSocket
+         * @property {string|null} [senderNatType] NatHoleInstruction senderNatType
+         * @property {string|null} [senderBehavior] NatHoleInstruction senderBehavior
+         * @property {number|null} [portsDifference] NatHoleInstruction portsDifference
+         * @property {boolean|null} [regularPortsChange] NatHoleInstruction regularPortsChange
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a NatHoleInstruction.
+         * @memberof n2n
+         * @interface INatHoleInstruction
+         * @augments n2n.NatHoleInstruction.$Properties
+         * @deprecated Use n2n.NatHoleInstruction.$Properties instead.
+         */
+
+        /**
+         * Shape of a NatHoleInstruction.
+         * @typedef {n2n.NatHoleInstruction.$Properties} n2n.NatHoleInstruction.$Shape
+         */
+
+        /**
+         * Constructs a new NatHoleInstruction.
+         * @memberof n2n
+         * @classdesc Represents a NatHoleInstruction.
+         * @constructor
+         * @param {n2n.NatHoleInstruction.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const NatHoleInstruction = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * NatHoleInstruction role.
+         * @member {n2n.NatHoleRole} role
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.role = 0;
+
+        /**
+         * NatHoleInstruction portsRangeFrom.
+         * @member {number} portsRangeFrom
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.portsRangeFrom = 0;
+
+        /**
+         * NatHoleInstruction portsRangeTo.
+         * @member {number} portsRangeTo
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.portsRangeTo = 0;
+
+        /**
+         * NatHoleInstruction ttl.
+         * @member {number} ttl
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.ttl = 0;
+
+        /**
+         * NatHoleInstruction targetMac.
+         * @member {Uint8Array} targetMac
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.targetMac = $util.newBuffer([]);
+
+        /**
+         * NatHoleInstruction senderMac.
+         * @member {Uint8Array} senderMac
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.senderMac = $util.newBuffer([]);
+
+        /**
+         * NatHoleInstruction senderP2pEndpoint.
+         * @member {string} senderP2pEndpoint
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.senderP2pEndpoint = "";
+
+        /**
+         * NatHoleInstruction senderPubSocket.
+         * @member {string} senderPubSocket
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.senderPubSocket = "";
+
+        /**
+         * NatHoleInstruction senderNatType.
+         * @member {string} senderNatType
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.senderNatType = "";
+
+        /**
+         * NatHoleInstruction senderBehavior.
+         * @member {string} senderBehavior
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.senderBehavior = "";
+
+        /**
+         * NatHoleInstruction portsDifference.
+         * @member {number} portsDifference
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.portsDifference = 0;
+
+        /**
+         * NatHoleInstruction regularPortsChange.
+         * @member {boolean} regularPortsChange
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.regularPortsChange = false;
+
+        /**
+         * Creates a new NatHoleInstruction instance using the specified properties.
+         * @function create
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {n2n.NatHoleInstruction.$Properties=} [properties] Properties to set
+         * @returns {n2n.NatHoleInstruction} NatHoleInstruction instance
+         * @type {{
+         *   (properties: n2n.NatHoleInstruction.$Shape): n2n.NatHoleInstruction & n2n.NatHoleInstruction.$Shape;
+         *   (properties?: n2n.NatHoleInstruction.$Properties): n2n.NatHoleInstruction;
+         * }}
+         */
+        NatHoleInstruction.create = function(properties) {
+            return new NatHoleInstruction(properties);
+        };
+
+        /**
+         * Encodes the specified NatHoleInstruction message. Does not implicitly {@link n2n.NatHoleInstruction.verify|verify} messages.
+         * @function encode
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {n2n.NatHoleInstruction.$Properties} message NatHoleInstruction message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        NatHoleInstruction.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role") && message.role !== 0)
+                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.role);
+            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom") && message.portsRangeFrom !== 0)
+                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.portsRangeFrom);
+            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo") && message.portsRangeTo !== 0)
+                writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.portsRangeTo);
+            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl") && message.ttl !== 0)
+                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.ttl);
+            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac") && message.targetMac.length)
+                writer.uint32(/* id 5, wireType 2 =*/42).bytes(message.targetMac);
+            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac") && message.senderMac.length)
+                writer.uint32(/* id 6, wireType 2 =*/50).bytes(message.senderMac);
+            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint") && message.senderP2pEndpoint !== "")
+                writer.uint32(/* id 7, wireType 2 =*/58).string(message.senderP2pEndpoint);
+            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket") && message.senderPubSocket !== "")
+                writer.uint32(/* id 8, wireType 2 =*/66).string(message.senderPubSocket);
+            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType") && message.senderNatType !== "")
+                writer.uint32(/* id 9, wireType 2 =*/74).string(message.senderNatType);
+            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior") && message.senderBehavior !== "")
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.senderBehavior);
+            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference") && message.portsDifference !== 0)
+                writer.uint32(/* id 11, wireType 0 =*/88).int32(message.portsDifference);
+            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange") && message.regularPortsChange !== false)
+                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.regularPortsChange);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified NatHoleInstruction message, length delimited. Does not implicitly {@link n2n.NatHoleInstruction.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {n2n.NatHoleInstruction.$Properties} message NatHoleInstruction message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        NatHoleInstruction.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a NatHoleInstruction message from the specified reader or buffer.
+         * @function decode
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {n2n.NatHoleInstruction & n2n.NatHoleInstruction.$Shape} NatHoleInstruction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        NatHoleInstruction.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.n2n.NatHoleInstruction();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.role = value;
+                        else
+                            delete message.role;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.portsRangeFrom = value;
+                        else
+                            delete message.portsRangeFrom;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.portsRangeTo = value;
+                        else
+                            delete message.portsRangeTo;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.ttl = value;
+                        else
+                            delete message.ttl;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.bytes()).length)
+                            message.targetMac = value;
+                        else
+                            delete message.targetMac;
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.bytes()).length)
+                            message.senderMac = value;
+                        else
+                            delete message.senderMac;
+                        continue;
+                    }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderP2pEndpoint = value;
+                        else
+                            delete message.senderP2pEndpoint;
+                        continue;
+                    }
+                case 8: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderPubSocket = value;
+                        else
+                            delete message.senderPubSocket;
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderNatType = value;
+                        else
+                            delete message.senderNatType;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.senderBehavior = value;
+                        else
+                            delete message.senderBehavior;
+                        continue;
+                    }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.portsDifference = value;
+                        else
+                            delete message.portsDifference;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.regularPortsChange = value;
+                        else
+                            delete message.regularPortsChange;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a NatHoleInstruction message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {n2n.NatHoleInstruction & n2n.NatHoleInstruction.$Shape} NatHoleInstruction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        NatHoleInstruction.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a NatHoleInstruction message.
+         * @function verify
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        NatHoleInstruction.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
+                if (typeof message.role !== "number" || (message.role | 0) !== message.role)
+                    return "role: enum value expected";
+            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
+                if (!$util.isInteger(message.portsRangeFrom))
+                    return "portsRangeFrom: integer expected";
+            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
+                if (!$util.isInteger(message.portsRangeTo))
+                    return "portsRangeTo: integer expected";
+            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
+                if (!$util.isInteger(message.ttl))
+                    return "ttl: integer expected";
+            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
+                if (!(message.targetMac && typeof message.targetMac.length === "number" || $util.isString(message.targetMac)))
+                    return "targetMac: buffer expected";
+            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
+                if (!(message.senderMac && typeof message.senderMac.length === "number" || $util.isString(message.senderMac)))
+                    return "senderMac: buffer expected";
+            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
+                if (!$util.isString(message.senderP2pEndpoint))
+                    return "senderP2pEndpoint: string expected";
+            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
+                if (!$util.isString(message.senderPubSocket))
+                    return "senderPubSocket: string expected";
+            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
+                if (!$util.isString(message.senderNatType))
+                    return "senderNatType: string expected";
+            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
+                if (!$util.isString(message.senderBehavior))
+                    return "senderBehavior: string expected";
+            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
+                if (!$util.isInteger(message.portsDifference))
+                    return "portsDifference: integer expected";
+            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
+                if (typeof message.regularPortsChange !== "boolean")
+                    return "regularPortsChange: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a NatHoleInstruction message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {n2n.NatHoleInstruction} NatHoleInstruction
+         */
+        NatHoleInstruction.fromObject = function (object, _depth) {
+            if (object instanceof $root.n2n.NatHoleInstruction)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".n2n.NatHoleInstruction: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.n2n.NatHoleInstruction();
+            if (object.role !== 0 && (typeof object.role !== "string" || $root.n2n.NatHoleRole[object.role] !== 0))
+                switch (object.role) {
+                case "DetectRoleSender":
+                case 0:
+                    message.role = 0;
+                    break;
+                case "DetectRoleReceiver":
+                case 1:
+                    message.role = 1;
+                    break;
+                default:
+                    if (typeof object.role === "number" && (object.role | 0) === object.role)
+                        message.role = object.role;
+                }
+            if (object.portsRangeFrom != null)
+                if ($Number(object.portsRangeFrom) !== 0)
+                    message.portsRangeFrom = object.portsRangeFrom >>> 0;
+            if (object.portsRangeTo != null)
+                if ($Number(object.portsRangeTo) !== 0)
+                    message.portsRangeTo = object.portsRangeTo >>> 0;
+            if (object.ttl != null)
+                if ($Number(object.ttl) !== 0)
+                    message.ttl = object.ttl >>> 0;
+            if (object.targetMac != null)
+                if (object.targetMac.length)
+                    if (typeof object.targetMac === "string")
+                        $util.base64.decode(object.targetMac, message.targetMac = $util.newBuffer($util.base64.length(object.targetMac)), 0);
+                    else if (object.targetMac.length >= 0)
+                        message.targetMac = object.targetMac;
+            if (object.senderMac != null)
+                if (object.senderMac.length)
+                    if (typeof object.senderMac === "string")
+                        $util.base64.decode(object.senderMac, message.senderMac = $util.newBuffer($util.base64.length(object.senderMac)), 0);
+                    else if (object.senderMac.length >= 0)
+                        message.senderMac = object.senderMac;
+            if (object.senderP2pEndpoint != null)
+                if (typeof object.senderP2pEndpoint !== "string" || object.senderP2pEndpoint.length)
+                    message.senderP2pEndpoint = $String(object.senderP2pEndpoint);
+            if (object.senderPubSocket != null)
+                if (typeof object.senderPubSocket !== "string" || object.senderPubSocket.length)
+                    message.senderPubSocket = $String(object.senderPubSocket);
+            if (object.senderNatType != null)
+                if (typeof object.senderNatType !== "string" || object.senderNatType.length)
+                    message.senderNatType = $String(object.senderNatType);
+            if (object.senderBehavior != null)
+                if (typeof object.senderBehavior !== "string" || object.senderBehavior.length)
+                    message.senderBehavior = $String(object.senderBehavior);
+            if (object.portsDifference != null)
+                if ($Number(object.portsDifference) !== 0)
+                    message.portsDifference = object.portsDifference | 0;
+            if (object.regularPortsChange != null)
+                if (object.regularPortsChange)
+                    message.regularPortsChange = $Boolean(object.regularPortsChange);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a NatHoleInstruction message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {n2n.NatHoleInstruction} message NatHoleInstruction
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        NatHoleInstruction.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.role = options.enums === $String ? "DetectRoleSender" : 0;
+                object.portsRangeFrom = 0;
+                object.portsRangeTo = 0;
+                object.ttl = 0;
+                if (options.bytes === $String)
+                    object.targetMac = "";
+                else {
+                    object.targetMac = [];
+                    if (options.bytes !== $Array)
+                        object.targetMac = $util.newBuffer(object.targetMac);
+                }
+                if (options.bytes === $String)
+                    object.senderMac = "";
+                else {
+                    object.senderMac = [];
+                    if (options.bytes !== $Array)
+                        object.senderMac = $util.newBuffer(object.senderMac);
+                }
+                object.senderP2pEndpoint = "";
+                object.senderPubSocket = "";
+                object.senderNatType = "";
+                object.senderBehavior = "";
+                object.portsDifference = 0;
+                object.regularPortsChange = false;
+            }
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
+                object.role = options.enums === $String ? $root.n2n.NatHoleRole[message.role] === $undefined ? message.role : $root.n2n.NatHoleRole[message.role] : message.role;
+            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
+                object.portsRangeFrom = message.portsRangeFrom;
+            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
+                object.portsRangeTo = message.portsRangeTo;
+            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
+                object.ttl = message.ttl;
+            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
+                object.targetMac = options.bytes === $String ? $util.base64.encode(message.targetMac, 0, message.targetMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.targetMac) : message.targetMac;
+            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
+                object.senderMac = options.bytes === $String ? $util.base64.encode(message.senderMac, 0, message.senderMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.senderMac) : message.senderMac;
+            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
+                object.senderP2pEndpoint = message.senderP2pEndpoint;
+            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
+                object.senderPubSocket = message.senderPubSocket;
+            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
+                object.senderNatType = message.senderNatType;
+            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
+                object.senderBehavior = message.senderBehavior;
+            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
+                object.portsDifference = message.portsDifference;
+            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
+                object.regularPortsChange = message.regularPortsChange;
+            return object;
+        };
+
+        /**
+         * Converts this NatHoleInstruction to JSON.
+         * @function toJSON
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        NatHoleInstruction.prototype.toJSON = function() {
+            return NatHoleInstruction.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for NatHoleInstruction
+         * @function getTypeUrl
+         * @memberof n2n.NatHoleInstruction
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        NatHoleInstruction.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/n2n.NatHoleInstruction";
+        };
+
+        return NatHoleInstruction;
     })();
 
     n2n.ICECandidate = (function() {
@@ -6546,630 +7483,6 @@ export const n2n = $root.n2n = (() => {
         };
 
         return LeasesInfos;
-    })();
-
-    n2n.NatHole = (function() {
-
-        /**
-         * Properties of a NatHole.
-         * @typedef {Object} n2n.NatHole.$Properties
-         * @property {n2n.NatHoleRole|null} [role] NatHole role
-         * @property {number|null} [portsRangeFrom] NatHole portsRangeFrom
-         * @property {number|null} [portsRangeTo] NatHole portsRangeTo
-         * @property {number|null} [ttl] NatHole ttl
-         * @property {Uint8Array|null} [targetMac] NatHole targetMac
-         * @property {Uint8Array|null} [senderMac] NatHole senderMac
-         * @property {string|null} [senderP2pEndpoint] NatHole senderP2pEndpoint
-         * @property {string|null} [senderPubSocket] NatHole senderPubSocket
-         * @property {string|null} [senderNatType] NatHole senderNatType
-         * @property {string|null} [senderBehavior] NatHole senderBehavior
-         * @property {number|null} [portsDifference] NatHole portsDifference
-         * @property {boolean|null} [regularPortsChange] NatHole regularPortsChange
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
-         */
-
-        /**
-         * Properties of a NatHole.
-         * @memberof n2n
-         * @interface INatHole
-         * @augments n2n.NatHole.$Properties
-         * @deprecated Use n2n.NatHole.$Properties instead.
-         */
-
-        /**
-         * Shape of a NatHole.
-         * @typedef {n2n.NatHole.$Properties} n2n.NatHole.$Shape
-         */
-
-        /**
-         * Constructs a new NatHole.
-         * @memberof n2n
-         * @classdesc Represents a NatHole.
-         * @constructor
-         * @param {n2n.NatHole.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
-         */
-        const NatHole = function (properties) {
-            if (properties)
-                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
-                        this[keys[i]] = properties[keys[i]];
-        };
-
-        /**
-         * NatHole role.
-         * @member {n2n.NatHoleRole} role
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.role = 0;
-
-        /**
-         * NatHole portsRangeFrom.
-         * @member {number} portsRangeFrom
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.portsRangeFrom = 0;
-
-        /**
-         * NatHole portsRangeTo.
-         * @member {number} portsRangeTo
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.portsRangeTo = 0;
-
-        /**
-         * NatHole ttl.
-         * @member {number} ttl
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.ttl = 0;
-
-        /**
-         * NatHole targetMac.
-         * @member {Uint8Array} targetMac
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.targetMac = $util.newBuffer([]);
-
-        /**
-         * NatHole senderMac.
-         * @member {Uint8Array} senderMac
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.senderMac = $util.newBuffer([]);
-
-        /**
-         * NatHole senderP2pEndpoint.
-         * @member {string} senderP2pEndpoint
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.senderP2pEndpoint = "";
-
-        /**
-         * NatHole senderPubSocket.
-         * @member {string} senderPubSocket
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.senderPubSocket = "";
-
-        /**
-         * NatHole senderNatType.
-         * @member {string} senderNatType
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.senderNatType = "";
-
-        /**
-         * NatHole senderBehavior.
-         * @member {string} senderBehavior
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.senderBehavior = "";
-
-        /**
-         * NatHole portsDifference.
-         * @member {number} portsDifference
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.portsDifference = 0;
-
-        /**
-         * NatHole regularPortsChange.
-         * @member {boolean} regularPortsChange
-         * @memberof n2n.NatHole
-         * @instance
-         */
-        NatHole.prototype.regularPortsChange = false;
-
-        /**
-         * Creates a new NatHole instance using the specified properties.
-         * @function create
-         * @memberof n2n.NatHole
-         * @static
-         * @param {n2n.NatHole.$Properties=} [properties] Properties to set
-         * @returns {n2n.NatHole} NatHole instance
-         * @type {{
-         *   (properties: n2n.NatHole.$Shape): n2n.NatHole & n2n.NatHole.$Shape;
-         *   (properties?: n2n.NatHole.$Properties): n2n.NatHole;
-         * }}
-         */
-        NatHole.create = function(properties) {
-            return new NatHole(properties);
-        };
-
-        /**
-         * Encodes the specified NatHole message. Does not implicitly {@link n2n.NatHole.verify|verify} messages.
-         * @function encode
-         * @memberof n2n.NatHole
-         * @static
-         * @param {n2n.NatHole.$Properties} message NatHole message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        NatHole.encode = function (message, writer, _depth) {
-            if (!writer)
-                writer = $Writer.create();
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                throw $Error("max depth exceeded");
-            if (message.role != null && $Object.hasOwnProperty.call(message, "role") && message.role !== 0)
-                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.role);
-            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom") && message.portsRangeFrom !== 0)
-                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.portsRangeFrom);
-            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo") && message.portsRangeTo !== 0)
-                writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.portsRangeTo);
-            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl") && message.ttl !== 0)
-                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.ttl);
-            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac") && message.targetMac.length)
-                writer.uint32(/* id 5, wireType 2 =*/42).bytes(message.targetMac);
-            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac") && message.senderMac.length)
-                writer.uint32(/* id 6, wireType 2 =*/50).bytes(message.senderMac);
-            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint") && message.senderP2pEndpoint !== "")
-                writer.uint32(/* id 7, wireType 2 =*/58).string(message.senderP2pEndpoint);
-            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket") && message.senderPubSocket !== "")
-                writer.uint32(/* id 8, wireType 2 =*/66).string(message.senderPubSocket);
-            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType") && message.senderNatType !== "")
-                writer.uint32(/* id 9, wireType 2 =*/74).string(message.senderNatType);
-            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior") && message.senderBehavior !== "")
-                writer.uint32(/* id 10, wireType 2 =*/82).string(message.senderBehavior);
-            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference") && message.portsDifference !== 0)
-                writer.uint32(/* id 11, wireType 0 =*/88).int32(message.portsDifference);
-            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange") && message.regularPortsChange !== false)
-                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.regularPortsChange);
-            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
-                for (let i = 0; i < message.$unknowns.length; ++i)
-                    writer.raw(message.$unknowns[i]);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified NatHole message, length delimited. Does not implicitly {@link n2n.NatHole.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof n2n.NatHole
-         * @static
-         * @param {n2n.NatHole.$Properties} message NatHole message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        NatHole.encodeDelimited = function(message, writer) {
-            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
-        };
-
-        /**
-         * Decodes a NatHole message from the specified reader or buffer.
-         * @function decode
-         * @memberof n2n.NatHole
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {n2n.NatHole & n2n.NatHole.$Shape} NatHole
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        NatHole.decode = function (reader, length, _end, _depth, _target) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $Reader.recursionLimit)
-                throw $Error("max depth exceeded");
-            let end, message, value;
-            if (length === $undefined)
-                end = reader.len;
-            else {
-                end = reader.pos + length;
-                if (end > reader.len)
-                    throw $RangeError("index out of range");
-                length = reader.len;
-                reader.len = end;
-            }
-            message = _target || new $root.n2n.NatHole();
-            while (reader.pos < end) {
-                let start = reader.pos;
-                let tag = reader.tag();
-                if (tag === _end) {
-                    _end = $undefined;
-                    break;
-                }
-                let wireType = tag & 7;
-                switch (tag >>>= 3) {
-                case 1: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.int32())
-                            message.role = value;
-                        else
-                            delete message.role;
-                        continue;
-                    }
-                case 2: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.uint32())
-                            message.portsRangeFrom = value;
-                        else
-                            delete message.portsRangeFrom;
-                        continue;
-                    }
-                case 3: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.uint32())
-                            message.portsRangeTo = value;
-                        else
-                            delete message.portsRangeTo;
-                        continue;
-                    }
-                case 4: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.uint32())
-                            message.ttl = value;
-                        else
-                            delete message.ttl;
-                        continue;
-                    }
-                case 5: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.bytes()).length)
-                            message.targetMac = value;
-                        else
-                            delete message.targetMac;
-                        continue;
-                    }
-                case 6: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.bytes()).length)
-                            message.senderMac = value;
-                        else
-                            delete message.senderMac;
-                        continue;
-                    }
-                case 7: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderP2pEndpoint = value;
-                        else
-                            delete message.senderP2pEndpoint;
-                        continue;
-                    }
-                case 8: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderPubSocket = value;
-                        else
-                            delete message.senderPubSocket;
-                        continue;
-                    }
-                case 9: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderNatType = value;
-                        else
-                            delete message.senderNatType;
-                        continue;
-                    }
-                case 10: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.senderBehavior = value;
-                        else
-                            delete message.senderBehavior;
-                        continue;
-                    }
-                case 11: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.int32())
-                            message.portsDifference = value;
-                        else
-                            delete message.portsDifference;
-                        continue;
-                    }
-                case 12: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.regularPortsChange = value;
-                        else
-                            delete message.regularPortsChange;
-                        continue;
-                    }
-                }
-                reader.skipType(wireType, _depth, tag);
-                if (!reader.discardUnknown) {
-                    $util.makeProp(message, "$unknowns", false);
-                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
-                }
-            }
-            if (length !== $undefined) {
-                if (reader.pos !== end)
-                    throw $RangeError("index out of range");
-                reader.len = length;
-            }
-            if (_end !== $undefined)
-                throw $Error("missing end group");
-            return message;
-        };
-
-        /**
-         * Decodes a NatHole message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof n2n.NatHole
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {n2n.NatHole & n2n.NatHole.$Shape} NatHole
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        NatHole.decodeDelimited = function(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a NatHole message.
-         * @function verify
-         * @memberof n2n.NatHole
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        NatHole.verify = function (message, _depth) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                return "max depth exceeded";
-            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
-                if (typeof message.role !== "number" || (message.role | 0) !== message.role)
-                    return "role: enum value expected";
-            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
-                if (!$util.isInteger(message.portsRangeFrom))
-                    return "portsRangeFrom: integer expected";
-            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
-                if (!$util.isInteger(message.portsRangeTo))
-                    return "portsRangeTo: integer expected";
-            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
-                if (!$util.isInteger(message.ttl))
-                    return "ttl: integer expected";
-            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
-                if (!(message.targetMac && typeof message.targetMac.length === "number" || $util.isString(message.targetMac)))
-                    return "targetMac: buffer expected";
-            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
-                if (!(message.senderMac && typeof message.senderMac.length === "number" || $util.isString(message.senderMac)))
-                    return "senderMac: buffer expected";
-            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
-                if (!$util.isString(message.senderP2pEndpoint))
-                    return "senderP2pEndpoint: string expected";
-            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
-                if (!$util.isString(message.senderPubSocket))
-                    return "senderPubSocket: string expected";
-            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
-                if (!$util.isString(message.senderNatType))
-                    return "senderNatType: string expected";
-            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
-                if (!$util.isString(message.senderBehavior))
-                    return "senderBehavior: string expected";
-            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
-                if (!$util.isInteger(message.portsDifference))
-                    return "portsDifference: integer expected";
-            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
-                if (typeof message.regularPortsChange !== "boolean")
-                    return "regularPortsChange: boolean expected";
-            return null;
-        };
-
-        /**
-         * Creates a NatHole message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof n2n.NatHole
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {n2n.NatHole} NatHole
-         */
-        NatHole.fromObject = function (object, _depth) {
-            if (object instanceof $root.n2n.NatHole)
-                return object;
-            if (!$util.isObject(object))
-                throw $TypeError(".n2n.NatHole: object expected");
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                throw $Error("max depth exceeded");
-            let message = new $root.n2n.NatHole();
-            if (object.role !== 0 && (typeof object.role !== "string" || $root.n2n.NatHoleRole[object.role] !== 0))
-                switch (object.role) {
-                case "DetectRoleSender":
-                case 0:
-                    message.role = 0;
-                    break;
-                case "DetectRoleReceiver":
-                case 1:
-                    message.role = 1;
-                    break;
-                default:
-                    if (typeof object.role === "number" && (object.role | 0) === object.role)
-                        message.role = object.role;
-                }
-            if (object.portsRangeFrom != null)
-                if ($Number(object.portsRangeFrom) !== 0)
-                    message.portsRangeFrom = object.portsRangeFrom >>> 0;
-            if (object.portsRangeTo != null)
-                if ($Number(object.portsRangeTo) !== 0)
-                    message.portsRangeTo = object.portsRangeTo >>> 0;
-            if (object.ttl != null)
-                if ($Number(object.ttl) !== 0)
-                    message.ttl = object.ttl >>> 0;
-            if (object.targetMac != null)
-                if (object.targetMac.length)
-                    if (typeof object.targetMac === "string")
-                        $util.base64.decode(object.targetMac, message.targetMac = $util.newBuffer($util.base64.length(object.targetMac)), 0);
-                    else if (object.targetMac.length >= 0)
-                        message.targetMac = object.targetMac;
-            if (object.senderMac != null)
-                if (object.senderMac.length)
-                    if (typeof object.senderMac === "string")
-                        $util.base64.decode(object.senderMac, message.senderMac = $util.newBuffer($util.base64.length(object.senderMac)), 0);
-                    else if (object.senderMac.length >= 0)
-                        message.senderMac = object.senderMac;
-            if (object.senderP2pEndpoint != null)
-                if (typeof object.senderP2pEndpoint !== "string" || object.senderP2pEndpoint.length)
-                    message.senderP2pEndpoint = $String(object.senderP2pEndpoint);
-            if (object.senderPubSocket != null)
-                if (typeof object.senderPubSocket !== "string" || object.senderPubSocket.length)
-                    message.senderPubSocket = $String(object.senderPubSocket);
-            if (object.senderNatType != null)
-                if (typeof object.senderNatType !== "string" || object.senderNatType.length)
-                    message.senderNatType = $String(object.senderNatType);
-            if (object.senderBehavior != null)
-                if (typeof object.senderBehavior !== "string" || object.senderBehavior.length)
-                    message.senderBehavior = $String(object.senderBehavior);
-            if (object.portsDifference != null)
-                if ($Number(object.portsDifference) !== 0)
-                    message.portsDifference = object.portsDifference | 0;
-            if (object.regularPortsChange != null)
-                if (object.regularPortsChange)
-                    message.regularPortsChange = $Boolean(object.regularPortsChange);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a NatHole message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof n2n.NatHole
-         * @static
-         * @param {n2n.NatHole} message NatHole
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        NatHole.toObject = function (message, options, _depth) {
-            if (!options)
-                options = {};
-            if (_depth === $undefined)
-                _depth = 0;
-            if (_depth > $util.recursionLimit)
-                throw $Error("max depth exceeded");
-            let object = {};
-            if (options.defaults) {
-                object.role = options.enums === $String ? "DetectRoleSender" : 0;
-                object.portsRangeFrom = 0;
-                object.portsRangeTo = 0;
-                object.ttl = 0;
-                if (options.bytes === $String)
-                    object.targetMac = "";
-                else {
-                    object.targetMac = [];
-                    if (options.bytes !== $Array)
-                        object.targetMac = $util.newBuffer(object.targetMac);
-                }
-                if (options.bytes === $String)
-                    object.senderMac = "";
-                else {
-                    object.senderMac = [];
-                    if (options.bytes !== $Array)
-                        object.senderMac = $util.newBuffer(object.senderMac);
-                }
-                object.senderP2pEndpoint = "";
-                object.senderPubSocket = "";
-                object.senderNatType = "";
-                object.senderBehavior = "";
-                object.portsDifference = 0;
-                object.regularPortsChange = false;
-            }
-            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
-                object.role = options.enums === $String ? $root.n2n.NatHoleRole[message.role] === $undefined ? message.role : $root.n2n.NatHoleRole[message.role] : message.role;
-            if (message.portsRangeFrom != null && $Object.hasOwnProperty.call(message, "portsRangeFrom"))
-                object.portsRangeFrom = message.portsRangeFrom;
-            if (message.portsRangeTo != null && $Object.hasOwnProperty.call(message, "portsRangeTo"))
-                object.portsRangeTo = message.portsRangeTo;
-            if (message.ttl != null && $Object.hasOwnProperty.call(message, "ttl"))
-                object.ttl = message.ttl;
-            if (message.targetMac != null && $Object.hasOwnProperty.call(message, "targetMac"))
-                object.targetMac = options.bytes === $String ? $util.base64.encode(message.targetMac, 0, message.targetMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.targetMac) : message.targetMac;
-            if (message.senderMac != null && $Object.hasOwnProperty.call(message, "senderMac"))
-                object.senderMac = options.bytes === $String ? $util.base64.encode(message.senderMac, 0, message.senderMac.length) : options.bytes === $Array ? $Array.prototype.slice.call(message.senderMac) : message.senderMac;
-            if (message.senderP2pEndpoint != null && $Object.hasOwnProperty.call(message, "senderP2pEndpoint"))
-                object.senderP2pEndpoint = message.senderP2pEndpoint;
-            if (message.senderPubSocket != null && $Object.hasOwnProperty.call(message, "senderPubSocket"))
-                object.senderPubSocket = message.senderPubSocket;
-            if (message.senderNatType != null && $Object.hasOwnProperty.call(message, "senderNatType"))
-                object.senderNatType = message.senderNatType;
-            if (message.senderBehavior != null && $Object.hasOwnProperty.call(message, "senderBehavior"))
-                object.senderBehavior = message.senderBehavior;
-            if (message.portsDifference != null && $Object.hasOwnProperty.call(message, "portsDifference"))
-                object.portsDifference = message.portsDifference;
-            if (message.regularPortsChange != null && $Object.hasOwnProperty.call(message, "regularPortsChange"))
-                object.regularPortsChange = message.regularPortsChange;
-            return object;
-        };
-
-        /**
-         * Converts this NatHole to JSON.
-         * @function toJSON
-         * @memberof n2n.NatHole
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        NatHole.prototype.toJSON = function() {
-            return NatHole.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        /**
-         * Gets the type url for NatHole
-         * @function getTypeUrl
-         * @memberof n2n.NatHole
-         * @static
-         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns {string} The type url
-         */
-        NatHole.getTypeUrl = function(prefix) {
-            if (prefix === $undefined)
-                prefix = "type.googleapis.com";
-            return prefix + "/n2n.NatHole";
-        };
-
-        return NatHole;
     })();
 
     return n2n;

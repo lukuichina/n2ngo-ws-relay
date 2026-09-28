@@ -21,6 +21,16 @@ message RegisterRequest {
   repeated string p2p_capabilities = 7;
   string nat_type = 8;
   string pub_socket = 9;
+  // This edge's own LAN addresses, each paired with the local port of its P2P
+  // socket, so a peer on the same broadcast domain can address it directly
+  // instead of hairpinning through the local router.
+  //
+  // FRP parity: pkg/nathole/nathole.go:145-149 builds the same list into
+  // NatHoleReport.AssistedAddrs from ListLocalIPsForNatHole. It is reported
+  // alongside pub_socket rather than merged into it because the two are tried
+  // in a fixed order by the punching side (assisted first), not as an
+  // unordered set.
+  repeated string assisted_sockets = 10;
 }
 
 // 对应 Go 中的 RegisterResponse
@@ -66,6 +76,9 @@ message PeerInfo {
   // in flight", which lets the relay distinguish a fresh report from a
   // stale one.
   string punch_result_peer_mac = 13;
+  // The peer's LAN addresses (see RegisterRequest.assisted_sockets), carried
+  // so the relay can copy them into NatHoleInstruction.sender_assisted_endpoints.
+  repeated string assisted_sockets = 14;
 }
 
 // NatHolePunchState: outcome of a hole-punch attempt, as reported by an edge
@@ -197,6 +210,19 @@ message NatHoleInstruction {
   // Milliseconds the relay held this instruction back relative to its
   // counterpart. 0 means "use the relay's configured default".
   uint32 send_delay_ms = 15;
+  // The SENDER's LAN addresses, as the receiver will see them.
+  //
+  // Only the sender acts on these: it tries them before the sender's
+  // STUN-reflexive pub_socket, because when both peers share a LAN a direct
+  // delivery needs no NAT mapping on either side and cannot be defeated by a
+  // router that does not hairpin.
+  //
+  // FRP parity: pkg/nathole/nathole.go:210-215 -- `detectAddrs =
+  // m.AssistedAddrs; detectAddrs = append(detectAddrs, m.CandidateAddrs...)`
+  // for the sender, and `detectAddrs = m.CandidateAddrs` for the receiver.
+  // The receiver deliberately gets no assisted list: opening a mapping on its
+  // own NAT is its job, and addressing a LAN address would do nothing for that.
+  repeated string sender_assisted_endpoints = 16;
 }
 
 // ICE Candidate 信令消息

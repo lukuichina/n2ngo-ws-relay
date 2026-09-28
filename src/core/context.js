@@ -99,7 +99,7 @@ export class CommunityState {
    * @returns {Object} { virtualIP, isNew, peerInfo }
    */
   async registerPeer(params) {
-    const { macAddr, ws, p2pEndpoint, p2pCapabilities, pubSocket, natType, encryptedMachineID } = params;
+    const { macAddr, ws, p2pEndpoint, p2pCapabilities, pubSocket, natType, encryptedMachineID, assistedSockets } = params;
     const normalizedMAC = macAddr.toLowerCase();
 
     // 分配虚拟 IP
@@ -116,6 +116,13 @@ export class CommunityState {
       p2pEndpoint: p2pEndpoint || "",
       p2pCapabilities: p2pCapabilities || [],
       pubSocket: pubSocket || "",
+      // The peer's own LAN addresses, forwarded verbatim into every
+      // NatHoleInstruction we build for it. FRP parity: frps copies
+      // m.AssistedAddrs into NatHoleResp without inspecting them
+      // (pkg/nathole/controller.go:365).
+      assistedSockets: Array.isArray(assistedSockets)
+        ? assistedSockets.filter((a) => typeof a === "string" && a)
+        : [],
       natType: natType || "unknown",
       lastSeen: now,
       registeredAt: now,
@@ -323,6 +330,10 @@ export class CommunityState {
         mac_addr: parseMAC(p.macAddr),
         virtual_ip: virtualIPStr,
         pub_socket: pubSocketStr,
+        // FRP parity: the peer list is how an edge learns what the relay
+        // knows about everyone else, including the addresses it can be
+        // reached on inside a shared LAN.
+        assisted_sockets: p.assistedSockets || [],
         // Observed source address reported by this peer: the address its
         // packets ACTUALLY arrive from. Under a NAT that binds a different
         // public port per destination, pub_socket is a STUN snapshot valid
@@ -351,6 +362,7 @@ export class CommunityState {
           mac_addr: parseMAC(originPeer.macAddr),
           virtual_ip: originVipStr,
           pub_socket: originPeer.pubSocket || "",
+          assisted_sockets: originPeer.assistedSockets || [],
           p2p_endpoint: this.config.allowP2P && !this.config.disableRelay ? originPeer.p2pEndpoint : "",
           nat_type: originPeer.natType || "unknown",
           last_seen: originPeer.lastSeen || Math.floor(Date.now() / 1000),

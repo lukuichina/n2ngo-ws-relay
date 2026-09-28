@@ -200,6 +200,15 @@ function decideNatHoleRoles(peerA, peerB, behaviorIndex = 0) {
     senderMac: strToMacBytes(sender.macAddr),
     senderP2pEndpoint: sender.p2pEndpoint || "",
     senderPubSocket: sender.pubSocket || "",
+    // The sender's LAN addresses, copied straight through.
+    //
+    // FRP parity: pkg/nathole/controller.go:365, `AssistedAddrs:
+    // m.AssistedAddrs` -- the server does not inspect them, and the client
+    // is the one that decides the order. Note the receiver receives this
+    // field too (both roles are handed the same instruction) but ignores
+    // it, which mirrors FRP: only the sender branch of nathole.go:210-215
+    // reads AssistedAddrs, while the receiver uses CandidateAddrs alone.
+    senderAssistedEndpoints: sender.assistedSockets || [],
     senderNatType: sender.natType || HardNAT,
     senderBehavior: (peerNatFeature(sender) ? peerNatFeature(sender).behavior : "BehaviorPortChanged") || "BehaviorPortChanged",
     portsDifference: portsDiff,
@@ -1109,8 +1118,18 @@ export class PacketHandler {
       p2pCapabilities: req.p2pCapabilities,
       pubSocket: req.pubSocket || "",
       natType: req.natType || "unknown",
+      // FRP parity: frpc reports its LAN addresses with the rest of its
+      // NAT feature (pkg/nathole/nathole.go:145-149) and frps relays them
+      // to the other side untouched.
+      assistedSockets: req.assistedSockets || [],
       encryptedMachineID: machineID,
     });
+
+    console.log(
+      `[PacketHandler] ${req.edgeMACAddr} NAT feature: natType=${req.natType} ` +
+      `pubSocket=${req.pubSocket || "<none>"} ` +
+      `assistedSockets=${JSON.stringify(req.assistedSockets || [])}`
+    );
 
     // 关联 WS 与社区
     this.relayRoom.connections.set(ws, {

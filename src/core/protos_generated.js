@@ -345,6 +345,7 @@ export const n2n = $root.n2n = (() => {
          * @property {Array.<string>|null} [p2pCapabilities] RegisterRequest p2pCapabilities
          * @property {string|null} [natType] RegisterRequest natType
          * @property {string|null} [pubSocket] RegisterRequest pubSocket
+         * @property {Array.<string>|null} [assistedSockets] RegisterRequest assistedSockets
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -371,6 +372,7 @@ export const n2n = $root.n2n = (() => {
          */
         const RegisterRequest = function (properties) {
             this.p2pCapabilities = [];
+            this.assistedSockets = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -450,6 +452,14 @@ export const n2n = $root.n2n = (() => {
         RegisterRequest.prototype.pubSocket = "";
 
         /**
+         * RegisterRequest assistedSockets.
+         * @member {Array.<string>} assistedSockets
+         * @memberof n2n.RegisterRequest
+         * @instance
+         */
+        RegisterRequest.prototype.assistedSockets = $util.emptyArray;
+
+        /**
          * Creates a new RegisterRequest instance using the specified properties.
          * @function create
          * @memberof n2n.RegisterRequest
@@ -500,6 +510,9 @@ export const n2n = $root.n2n = (() => {
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.natType);
             if (message.pubSocket != null && $Object.hasOwnProperty.call(message, "pubSocket") && message.pubSocket !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.pubSocket);
+            if (message.assistedSockets != null && message.assistedSockets.length)
+                for (let i = 0; i < message.assistedSockets.length; ++i)
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.assistedSockets[i]);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -637,6 +650,14 @@ export const n2n = $root.n2n = (() => {
                             delete message.pubSocket;
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.assistedSockets && message.assistedSockets.length))
+                            message.assistedSockets = [];
+                        message.assistedSockets.push(reader.stringVerify());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -716,6 +737,13 @@ export const n2n = $root.n2n = (() => {
             if (message.pubSocket != null && $Object.hasOwnProperty.call(message, "pubSocket"))
                 if (!$util.isString(message.pubSocket))
                     return "pubSocket: string expected";
+            if (message.assistedSockets != null && $Object.hasOwnProperty.call(message, "assistedSockets")) {
+                if (!$Array.isArray(message.assistedSockets))
+                    return "assistedSockets: array expected";
+                for (let i = 0; i < message.assistedSockets.length; ++i)
+                    if (!$util.isString(message.assistedSockets[i]))
+                        return "assistedSockets: string[] expected";
+            }
             return null;
         };
 
@@ -774,6 +802,13 @@ export const n2n = $root.n2n = (() => {
             if (object.pubSocket != null)
                 if (typeof object.pubSocket !== "string" || object.pubSocket.length)
                     message.pubSocket = $String(object.pubSocket);
+            if (object.assistedSockets) {
+                if (!$Array.isArray(object.assistedSockets))
+                    throw $TypeError(".n2n.RegisterRequest.assistedSockets: array expected");
+                message.assistedSockets = $Array(object.assistedSockets.length);
+                for (let i = 0; i < object.assistedSockets.length; ++i)
+                    message.assistedSockets[i] = $String(object.assistedSockets[i]);
+            }
             return message;
         };
 
@@ -794,8 +829,10 @@ export const n2n = $root.n2n = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.arrays || options.defaults)
+            if (options.arrays || options.defaults) {
                 object.p2pCapabilities = [];
+                object.assistedSockets = [];
+            }
             if (options.defaults) {
                 object.edgeMacAddr = "";
                 object.edgeDesc = "";
@@ -839,6 +876,11 @@ export const n2n = $root.n2n = (() => {
                 object.natType = message.natType;
             if (message.pubSocket != null && $Object.hasOwnProperty.call(message, "pubSocket"))
                 object.pubSocket = message.pubSocket;
+            if (message.assistedSockets && message.assistedSockets.length) {
+                object.assistedSockets = $Array(message.assistedSockets.length);
+                for (let j = 0; j < message.assistedSockets.length; ++j)
+                    object.assistedSockets[j] = message.assistedSockets[j];
+            }
             return object;
         };
 
@@ -1365,6 +1407,7 @@ export const n2n = $root.n2n = (() => {
          * @property {string|null} [observedRaddr] PeerInfo observedRaddr
          * @property {n2n.NatHolePunchResult.$Properties|null} [punchResult] PeerInfo punchResult
          * @property {string|null} [punchResultPeerMac] PeerInfo punchResultPeerMac
+         * @property {Array.<string>|null} [assistedSockets] PeerInfo assistedSockets
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -1391,6 +1434,7 @@ export const n2n = $root.n2n = (() => {
          */
         const PeerInfo = function (properties) {
             this.p2pCapabilities = [];
+            this.assistedSockets = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -1502,6 +1546,14 @@ export const n2n = $root.n2n = (() => {
         PeerInfo.prototype.punchResultPeerMac = "";
 
         /**
+         * PeerInfo assistedSockets.
+         * @member {Array.<string>} assistedSockets
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.assistedSockets = $util.emptyArray;
+
+        /**
          * Creates a new PeerInfo instance using the specified properties.
          * @function create
          * @memberof n2n.PeerInfo
@@ -1560,6 +1612,9 @@ export const n2n = $root.n2n = (() => {
                 $root.n2n.NatHolePunchResult.encode(message.punchResult, writer.uint32(/* id 12, wireType 2 =*/98).fork(), _depth + 1).ldelim();
             if (message.punchResultPeerMac != null && $Object.hasOwnProperty.call(message, "punchResultPeerMac") && message.punchResultPeerMac !== "")
                 writer.uint32(/* id 13, wireType 2 =*/106).string(message.punchResultPeerMac);
+            if (message.assistedSockets != null && message.assistedSockets.length)
+                for (let i = 0; i < message.assistedSockets.length; ++i)
+                    writer.uint32(/* id 14, wireType 2 =*/114).string(message.assistedSockets[i]);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -1727,6 +1782,14 @@ export const n2n = $root.n2n = (() => {
                             delete message.punchResultPeerMac;
                         continue;
                     }
+                case 14: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.assistedSockets && message.assistedSockets.length))
+                            message.assistedSockets = [];
+                        message.assistedSockets.push(reader.stringVerify());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -1822,6 +1885,13 @@ export const n2n = $root.n2n = (() => {
             if (message.punchResultPeerMac != null && $Object.hasOwnProperty.call(message, "punchResultPeerMac"))
                 if (!$util.isString(message.punchResultPeerMac))
                     return "punchResultPeerMac: string expected";
+            if (message.assistedSockets != null && $Object.hasOwnProperty.call(message, "assistedSockets")) {
+                if (!$Array.isArray(message.assistedSockets))
+                    return "assistedSockets: array expected";
+                for (let i = 0; i < message.assistedSockets.length; ++i)
+                    if (!$util.isString(message.assistedSockets[i]))
+                        return "assistedSockets: string[] expected";
+            }
             return null;
         };
 
@@ -1900,6 +1970,13 @@ export const n2n = $root.n2n = (() => {
             if (object.punchResultPeerMac != null)
                 if (typeof object.punchResultPeerMac !== "string" || object.punchResultPeerMac.length)
                     message.punchResultPeerMac = $String(object.punchResultPeerMac);
+            if (object.assistedSockets) {
+                if (!$Array.isArray(object.assistedSockets))
+                    throw $TypeError(".n2n.PeerInfo.assistedSockets: array expected");
+                message.assistedSockets = $Array(object.assistedSockets.length);
+                for (let i = 0; i < object.assistedSockets.length; ++i)
+                    message.assistedSockets[i] = $String(object.assistedSockets[i]);
+            }
             return message;
         };
 
@@ -1920,8 +1997,10 @@ export const n2n = $root.n2n = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.arrays || options.defaults)
+            if (options.arrays || options.defaults) {
                 object.p2pCapabilities = [];
+                object.assistedSockets = [];
+            }
             if (options.defaults) {
                 object.virtualIp = "";
                 if (options.bytes === $String)
@@ -1980,6 +2059,11 @@ export const n2n = $root.n2n = (() => {
                 object.punchResult = $root.n2n.NatHolePunchResult.toObject(message.punchResult, options, _depth + 1);
             if (message.punchResultPeerMac != null && $Object.hasOwnProperty.call(message, "punchResultPeerMac"))
                 object.punchResultPeerMac = message.punchResultPeerMac;
+            if (message.assistedSockets && message.assistedSockets.length) {
+                object.assistedSockets = $Array(message.assistedSockets.length);
+                for (let j = 0; j < message.assistedSockets.length; ++j)
+                    object.assistedSockets[j] = message.assistedSockets[j];
+            }
             return object;
         };
 
@@ -4654,6 +4738,7 @@ export const n2n = $root.n2n = (() => {
          * @property {number|null} [mode] NatHoleInstruction mode
          * @property {number|null} [behaviorIndex] NatHoleInstruction behaviorIndex
          * @property {number|null} [sendDelayMs] NatHoleInstruction sendDelayMs
+         * @property {Array.<string>|null} [senderAssistedEndpoints] NatHoleInstruction senderAssistedEndpoints
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -4679,6 +4764,7 @@ export const n2n = $root.n2n = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const NatHoleInstruction = function (properties) {
+            this.senderAssistedEndpoints = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -4806,6 +4892,14 @@ export const n2n = $root.n2n = (() => {
         NatHoleInstruction.prototype.sendDelayMs = 0;
 
         /**
+         * NatHoleInstruction senderAssistedEndpoints.
+         * @member {Array.<string>} senderAssistedEndpoints
+         * @memberof n2n.NatHoleInstruction
+         * @instance
+         */
+        NatHoleInstruction.prototype.senderAssistedEndpoints = $util.emptyArray;
+
+        /**
          * Creates a new NatHoleInstruction instance using the specified properties.
          * @function create
          * @memberof n2n.NatHoleInstruction
@@ -4867,6 +4961,9 @@ export const n2n = $root.n2n = (() => {
                 writer.uint32(/* id 14, wireType 0 =*/112).uint32(message.behaviorIndex);
             if (message.sendDelayMs != null && $Object.hasOwnProperty.call(message, "sendDelayMs") && message.sendDelayMs !== 0)
                 writer.uint32(/* id 15, wireType 0 =*/120).uint32(message.sendDelayMs);
+            if (message.senderAssistedEndpoints != null && message.senderAssistedEndpoints.length)
+                for (let i = 0; i < message.senderAssistedEndpoints.length; ++i)
+                    writer.uint32(/* id 16, wireType 2 =*/130).string(message.senderAssistedEndpoints[i]);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -5059,6 +5156,14 @@ export const n2n = $root.n2n = (() => {
                             delete message.sendDelayMs;
                         continue;
                     }
+                case 16: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.senderAssistedEndpoints && message.senderAssistedEndpoints.length))
+                            message.senderAssistedEndpoints = [];
+                        message.senderAssistedEndpoints.push(reader.stringVerify());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -5152,6 +5257,13 @@ export const n2n = $root.n2n = (() => {
             if (message.sendDelayMs != null && $Object.hasOwnProperty.call(message, "sendDelayMs"))
                 if (!$util.isInteger(message.sendDelayMs))
                     return "sendDelayMs: integer expected";
+            if (message.senderAssistedEndpoints != null && $Object.hasOwnProperty.call(message, "senderAssistedEndpoints")) {
+                if (!$Array.isArray(message.senderAssistedEndpoints))
+                    return "senderAssistedEndpoints: array expected";
+                for (let i = 0; i < message.senderAssistedEndpoints.length; ++i)
+                    if (!$util.isString(message.senderAssistedEndpoints[i]))
+                        return "senderAssistedEndpoints: string[] expected";
+            }
             return null;
         };
 
@@ -5235,6 +5347,13 @@ export const n2n = $root.n2n = (() => {
             if (object.sendDelayMs != null)
                 if ($Number(object.sendDelayMs) !== 0)
                     message.sendDelayMs = object.sendDelayMs >>> 0;
+            if (object.senderAssistedEndpoints) {
+                if (!$Array.isArray(object.senderAssistedEndpoints))
+                    throw $TypeError(".n2n.NatHoleInstruction.senderAssistedEndpoints: array expected");
+                message.senderAssistedEndpoints = $Array(object.senderAssistedEndpoints.length);
+                for (let i = 0; i < object.senderAssistedEndpoints.length; ++i)
+                    message.senderAssistedEndpoints[i] = $String(object.senderAssistedEndpoints[i]);
+            }
             return message;
         };
 
@@ -5255,6 +5374,8 @@ export const n2n = $root.n2n = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.senderAssistedEndpoints = [];
             if (options.defaults) {
                 object.role = options.enums === $String ? "DetectRoleSender" : 0;
                 object.portsRangeFrom = 0;
@@ -5314,6 +5435,11 @@ export const n2n = $root.n2n = (() => {
                 object.behaviorIndex = message.behaviorIndex;
             if (message.sendDelayMs != null && $Object.hasOwnProperty.call(message, "sendDelayMs"))
                 object.sendDelayMs = message.sendDelayMs;
+            if (message.senderAssistedEndpoints && message.senderAssistedEndpoints.length) {
+                object.senderAssistedEndpoints = $Array(message.senderAssistedEndpoints.length);
+                for (let j = 0; j < message.senderAssistedEndpoints.length; ++j)
+                    object.senderAssistedEndpoints[j] = message.senderAssistedEndpoints[j];
+            }
             return object;
         };
 

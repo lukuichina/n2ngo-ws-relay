@@ -163,6 +163,7 @@ export function decodeRegisterRequest(buf) {
     p2pCapabilities: data.p2pCapabilities || [],
     natType: data.natType || "unknown",
     pubSocket: data.pubSocket || "",
+    assistedSockets: data.assistedSockets || [],
   };
 }
 
@@ -272,6 +273,7 @@ export function encodePeerInfoList(list) {
     p2pCapabilities: originList.capabilities || originList.p2p_capabilities || originList.p2pCapabilities || [],
     natHoleInstruction: originList.nat_hole_instruction || originList.natHoleInstruction || null,
     observedRaddr: originList.observed_raddr || originList.observedRaddr || "",
+    assistedSockets: originList.assisted_sockets || originList.assistedSockets || [],
   } : null;
 
   const peerInfos = (peerInfoList || []).map(p => ({
@@ -286,6 +288,14 @@ export function encodePeerInfoList(list) {
     p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
     natHoleInstruction: p.nat_hole_instruction || p.natHoleInstruction || null,
     observedRaddr: p.observed_raddr || p.observedRaddr || "",
+    // The peer's own LAN addresses, as reported at registration. Without
+    // this the punching side never learns them and can only ever aim at the
+    // STUN-reflexive address.
+    //
+    // Note this function is an explicit field-by-field projection, so a field
+    // added to PeerInfo is dropped here until it is listed. Same caveat as
+    // decodeRegisterRequest.
+    assistedSockets: p.assisted_sockets || p.assistedSockets || [],
   }));
 
   return encode("PeerInfoList", {

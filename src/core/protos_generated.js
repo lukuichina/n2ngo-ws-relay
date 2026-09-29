@@ -1408,6 +1408,7 @@ export const n2n = $root.n2n = (() => {
          * @property {n2n.NatHolePunchResult.$Properties|null} [punchResult] PeerInfo punchResult
          * @property {string|null} [punchResultPeerMac] PeerInfo punchResultPeerMac
          * @property {Array.<string>|null} [assistedSockets] PeerInfo assistedSockets
+         * @property {number|null} [p2pStatus] PeerInfo p2pStatus
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -1554,6 +1555,14 @@ export const n2n = $root.n2n = (() => {
         PeerInfo.prototype.assistedSockets = $util.emptyArray;
 
         /**
+         * PeerInfo p2pStatus.
+         * @member {number} p2pStatus
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.p2pStatus = 0;
+
+        /**
          * Creates a new PeerInfo instance using the specified properties.
          * @function create
          * @memberof n2n.PeerInfo
@@ -1615,6 +1624,8 @@ export const n2n = $root.n2n = (() => {
             if (message.assistedSockets != null && message.assistedSockets.length)
                 for (let i = 0; i < message.assistedSockets.length; ++i)
                     writer.uint32(/* id 14, wireType 2 =*/114).string(message.assistedSockets[i]);
+            if (message.p2pStatus != null && $Object.hasOwnProperty.call(message, "p2pStatus") && message.p2pStatus !== 0)
+                writer.uint32(/* id 15, wireType 0 =*/120).uint32(message.p2pStatus);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -1790,6 +1801,15 @@ export const n2n = $root.n2n = (() => {
                         message.assistedSockets.push(reader.stringVerify());
                         continue;
                     }
+                case 15: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.p2pStatus = value;
+                        else
+                            delete message.p2pStatus;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -1892,6 +1912,9 @@ export const n2n = $root.n2n = (() => {
                     if (!$util.isString(message.assistedSockets[i]))
                         return "assistedSockets: string[] expected";
             }
+            if (message.p2pStatus != null && $Object.hasOwnProperty.call(message, "p2pStatus"))
+                if (!$util.isInteger(message.p2pStatus))
+                    return "p2pStatus: integer expected";
             return null;
         };
 
@@ -1977,6 +2000,9 @@ export const n2n = $root.n2n = (() => {
                 for (let i = 0; i < object.assistedSockets.length; ++i)
                     message.assistedSockets[i] = $String(object.assistedSockets[i]);
             }
+            if (object.p2pStatus != null)
+                if ($Number(object.p2pStatus) !== 0)
+                    message.p2pStatus = object.p2pStatus >>> 0;
             return message;
         };
 
@@ -2024,6 +2050,7 @@ export const n2n = $root.n2n = (() => {
                 object.observedRaddr = "";
                 object.punchResult = null;
                 object.punchResultPeerMac = "";
+                object.p2pStatus = 0;
             }
             if (message.virtualIp != null && $Object.hasOwnProperty.call(message, "virtualIp"))
                 object.virtualIp = message.virtualIp;
@@ -2064,6 +2091,8 @@ export const n2n = $root.n2n = (() => {
                 for (let j = 0; j < message.assistedSockets.length; ++j)
                     object.assistedSockets[j] = message.assistedSockets[j];
             }
+            if (message.p2pStatus != null && $Object.hasOwnProperty.call(message, "p2pStatus"))
+                object.p2pStatus = message.p2pStatus;
             return object;
         };
 

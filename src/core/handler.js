@@ -61,6 +61,48 @@ const HardNAT = "HardNAT";
 const DetectRoleSender = 0;
 const DetectRoleReceiver = 1;
 
+// P2PCapacity.Unavailable — mirrored from the Go enum in pkg/p2p/p2p.go.
+// Hardcoded because the relay runs as a worker with no access to that package.
+const P2P_UNAVAILABLE = 4;
+
+// How long a freshly recorded success is immune to retirement. A punch takes
+// a moment to reach full duplex on both sides, and demotion reports can
+// arrive out of order; without this the relay can retire a success it
+// recorded moments earlier.
+const SUCCESS_GRACE_MS = 30000;
+
+/**
+ * Decide whether a recorded punch success no longer describes a live tunnel.
+ *
+ * The bar is Unavailable and nothing looser. A fresh punch reports
+ * Pending(1), then Available(2), then FullDuplex(3), and the relay observes
+ * every one of those steps on the way up — so retiring on any non-3 value
+ * re-punches a healthy pair once per status transition. That is not
+ * hypothetical: the 2026-09-29 run retired on (1,0), (2,0) and (0,2), none of
+ * which mean the tunnel is down, and each retirement triggered another round
+ * of punching on a pair that was already carrying traffic.
+ *
+ * Unavailable(4) is the one status that does mean it; it is where a
+ * keepalive timeout and a failed re-punch both land. The grace period covers
+ * the other race — a demotion already in flight when a success arrived
+ * reports Unavailable a moment *after* that success, which is when retiring
+ * is right, but also when a lagging report could retire a tunnel that is
+ * healthy again.
+ *
+ * @param {number|undefined} senderStatus status the sender reports for the receiver
+ * @param {number|undefined} receiverStatus status the receiver reports for the sender
+ * @param {{state:number, at:number}|undefined} priorReport recorded outcome, if any
+ * @param {number} now epoch ms
+ * @returns {boolean} true when the success is stale and should be forgotten
+ */
+export function shouldRetireSuccess(senderStatus, receiverStatus, priorReport, now) {
+  if (!priorReport || priorReport.state !== 3) return false;
+  if (senderStatus !== P2P_UNAVAILABLE && receiverStatus !== P2P_UNAVAILABLE) {
+    return false;
+  }
+  return now - (priorReport.at || 0) > SUCCESS_GRACE_MS;
+}
+
 // ClassifyFeatureCount equivalent of FRP's ClassifyFeatureCount.
 // Counts EasyNAT vs HardNAT features and how many HardNAT features
 // have regular port changes.
@@ -745,13 +787,23 @@ export class PacketHandler {
 
         // A pair that already has a live tunnel must be re-coordinated
         // promptly (e.g. after the other side's NAT port changes), so clear
-        // its backoff. p2pStatus is only present on newer P2PStateInfo
-        // payloads, so read it defensively rather than importing an enum that
-        // the relay side never sets.
-        const statusOf = (mac) => {
-          const info = commState.p2pInfos && commState.p2pInfos.get(mac);
-          return info ? info.p2pStatus : undefined;
+        // its backoff.
+        //
+        // p2pInfos is keyed by the *reporting* edge and holds a {from, to}
+        // pair: `to` is what that edge says about each of its peers. So a
+        // side's status toward its partner is not the partner's own entry --
+        // it is the partner's row inside the reporter's `to` list. Reading
+        // info.p2pStatus straight off the map value returned undefined
+        // forever, because the normalised object has no top-level status at
+        // all; that made every comparison below vacuously "not full duplex".
+        const statusOf = (reporterMac, peerMac) => {
+          const info = commState.p2pInfos && commState.p2pInfos.get(reporterMac);
+          if (!info || !Array.isArray(info.to)) return undefined;
+          const row = info.to.find((x) => x && x.macAddr === peerMac);
+          return row ? row.p2pStatus : undefined;
         };
+        // See shouldRetireSuccess() above for why the bar is Unavailable only.
+        //
 
         // === A "succeeded" report only describes the tunnel it was made for ===
         //
@@ -766,19 +818,13 @@ export class PacketHandler {
         // outside.
         //
         // So the success report is retired as soon as the tunnel it described
-        // is gone: if either side is currently reporting something other than
-        // full duplex, the pair is no longer up and coordination resumes. A
-        // demotion is reported through P2PStateInfo, so this converges on the
-        // same signal the success was derived from.
-        const senderStatus = statusOf(result.senderMAC);
-        const receiverStatus = statusOf(result.receiverMAC);
+        // is gone. A demotion is reported through P2PStateInfo, so this
+        // converges on the same signal the success was derived from. The rule
+        // itself lives in shouldRetireSuccess() so it can be tested directly.
+        const senderStatus = statusOf(result.senderMAC, result.receiverMAC);
+        const receiverStatus = statusOf(result.receiverMAC, result.senderMAC);
         const priorReport = this.natHolePunchState.get(pairKey);
-        if (
-          priorReport &&
-          priorReport.state === 3 &&
-          senderStatus !== 3 &&
-          receiverStatus !== 3
-        ) {
+        if (shouldRetireSuccess(senderStatus, receiverStatus, priorReport, now)) {
           this.natHolePunchState.delete(pairKey);
           this._failCounts.delete(pairKey);
           this.natHoleBackoff.delete(pairKey);
@@ -908,11 +954,19 @@ export class PacketHandler {
    */
   async handleMessage(ws, data) {
     const buf = data instanceof Uint8Array ? data : new Uint8Array(data);
-    console.debug(`[PacketHandler] handleMessage called, buffer length=${buf.length}, first 16 bytes=${Array.from(buf.slice(0,16)).map(b=>b.toString(16).padStart(2,'0')).join(' ')}`);
+    // Per-message tracing is off by default. It cost 165k lines over 11
+    // minutes of a two-node test — 7.5 messages/s, two lines each, plus a
+    // 16-byte hex dump — and 68% of the resulting log volume was wrangler's
+    // inspector proxying every one of those console calls. Set
+    // DEBUG_PACKET_TRACE="1" in wrangler.toml when a packet-level trace is
+    // genuinely wanted.
+    if (this.env && this.env.DEBUG_PACKET_TRACE === "1") {
+      console.debug(`[PacketHandler] handleMessage called, buffer length=${buf.length}, first 16 bytes=${Array.from(buf.slice(0,16)).map(b=>b.toString(16).padStart(2,'0')).join(' ')}`);
 
     // 检查 WebSocket 关联的社区
     const connInfo = this.relayRoom.connections.get(ws);
-    console.debug(`[PacketHandler] WS connection info:`, connInfo ? { community: connInfo.community, macAddr: connInfo.macAddr?.toString() } : 'none');
+      console.debug(`[PacketHandler] WS connection info:`, connInfo ? { community: connInfo.community, macAddr: connInfo.macAddr?.toString() } : 'none');
+    }
 
     // 首先尝试解析为 ProtoV 包 (需要至少 HEADER_SIZE 字节)
     if (buf.length >= HEADER_SIZE) {

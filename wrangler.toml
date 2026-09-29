@@ -12,6 +12,11 @@ bindings = [
 ]
 
 [vars]
+# Per-message packet tracing. Off by default: at ~7.5 WS messages/s it
+# produced 165k log lines in 11 minutes on a two-node test, and wrangler's
+# dev inspector proxied every console call on top of that. Set to "1" only
+# while chasing a specific packet-level problem.
+DEBUG_PACKET_TRACE = "0"
 # WebSocket 路径，客户端连接 wss://domain/n2n?community=xxx
 WS_PATH = "n2n"
 

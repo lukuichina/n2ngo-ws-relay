@@ -459,6 +459,24 @@ export function decodePeerP2PInfos(buf) {
     lastSeen: p.lastSeen || p.last_seen || 0,
     p2pCapabilities: p.capabilities || p.p2p_capabilities || p.p2pCapabilities || [],
     observedRaddr: p.observedRaddr || p.observed_raddr || "",
+    // Hole-punch outcome for this peer (proto fields 12 and 13). These have to
+    // survive normalisation: recordPunchResult() in handler.js is the only way
+    // the relay learns a punch succeeded, and it reads them off the normalised
+    // object. Dropping them here -- which this function did until 2026-09-29
+    // -- left the relay permanently blind to success, so it kept re-broadcasting
+    // instructions for pairs that were already up, on a 300s backoff.
+    // protos_generated.js decodes both fields correctly; the loss was entirely
+    // at this layer, which is why no amount of protobuf work surfaced it.
+    punchResult: p.punchResult || p.punch_result || null,
+    punchResultPeerMac: p.punchResultPeerMac || p.punch_result_peer_mac || "",
+    // Proto field 15: this edge's current P2P status toward the peer named by
+    // punchResultPeerMac (3 = FullDuplex). statusOf() in handler.js reads this
+    // to decide whether a recorded punch success still describes a live tunnel.
+    // It has to survive normalisation for the same reason punchResult does:
+    // without it the relay cannot distinguish "punch once succeeded" from
+    // "punch is working right now", which is exactly the distinction that
+    // decides whether to re-punch a pair.
+    p2pStatus: p.p2pStatus || p.p2p_status || 0,
   }));
 
   return { from, to };

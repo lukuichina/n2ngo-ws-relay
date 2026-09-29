@@ -79,6 +79,17 @@ message PeerInfo {
   // The peer's LAN addresses (see RegisterRequest.assisted_sockets), carried
   // so the relay can copy them into NatHoleInstruction.sender_assisted_endpoints.
   repeated string assisted_sockets = 14;
+  // This edge's current P2P status toward the peer named by
+  // punch_result_peer_mac, as a P2PCapacity value (0=Unknown,
+  // 1=Pending, 2=Available, 3=FullDuplex, 4=Unavailable).
+  //
+  // The relay needs this to decide whether a recorded punch success still
+  // describes a live tunnel. Without it the relay can see that a punch once
+  // succeeded but never that it later stopped working, so it must either
+  // suppress the pair forever or re-punch a pair that is already healthy.
+  // Both failure modes were seen in the field: a 300s instruction loop
+  // against an up pair, and vice versa.
+  uint32 p2p_status = 15;
 }
 
 // NatHolePunchState: outcome of a hole-punch attempt, as reported by an edge

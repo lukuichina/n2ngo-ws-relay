@@ -709,6 +709,22 @@ export class PacketHandler {
         `ladder index ${reported.behaviorIndex} → score ${score}; next rung for this pair: ` +
         `${this.natHoleAnalyzer.recommand(key)}`
       );
+    } else if (state === 1) {
+      // InProgress is inert -- no failCount, no backoff re-arm, no analyzer
+      // credit -- so it never reached the branch above and was invisible in
+      // the relay log.
+      //
+      // That mattered. An edge now reports InProgress the moment it dispatches
+      // its first punch, not only once the round ends, so this is the record
+      // that says "a round is running right now" -- the distinction between a
+      // pair that is slow and a pair that is dead. Without it the dispatch
+      // report could not be confirmed to have arrived at all: grepping the log
+      // for it returned nothing even with the code deployed, because the log
+      // line simply did not exist for this state.
+      console.log(
+        `[recordPunchResult] pair ${key} in-progress on ladder index ` +
+        `${reported.behaviorIndex} (attempts ${reported.attempts}): ${reported.detail}`
+      );
     }
   }
 
@@ -1058,6 +1074,25 @@ export class PacketHandler {
         ) {
           // SUPPRESSED: within backoff window (this is the path that stops
           // the broadcast storm).
+          //
+          // But coordinateNatHole() only runs when a P2PStateInfo arrives,
+          // and an edge waiting for an instruction punches nothing and
+          // therefore reports nothing. So this continue used to be terminal:
+          // the window would expire with nothing left to notice it, the pair
+          // would never be re-decided, and no instruction would ever be sent
+          // again. Observed in the field as a pair stuck on relay for 13+
+          // minutes -- last punch at 03:53:30, relay log full of
+          // "re-armed after failure" and never a "scheduled" line.
+          //
+          // armStaggerWake is the wake this path was missing. It is not
+          // stagger-specific: the alarm handler runs
+          // reBroadcastNatHoleInstructions(), which is the full decision pass,
+          // so the pair gets re-decided the moment its window closes.
+          if (this.relayRoom && typeof this.relayRoom.armStaggerWake === "function") {
+            this.relayRoom.armStaggerWake(prev.nextAllowedAt).catch((e) =>
+              console.error("[coordinateNatHole] backoff wake arm failed:", e)
+            );
+          }
           continue; // still cooling down
         }
 
@@ -1594,6 +1629,14 @@ export class PacketHandler {
     // so relaying it lets peers punch to a reachable address.
     if (p2pInfos.from && p2pInfos.from.observedRaddr) {
       commState.updatePeer(connInfo.macAddr, { observedRaddr: p2pInfos.from.observedRaddr });
+    }
+    // Same registration-timing trap as pubSocket/p2pEndpoint above, and it
+    // gates hole punching outright: isCoordEligible rejects any peer whose
+    // natType is neither HardNAT nor EasyNAT, so an edge that registered
+    // before STUN/NAT classification finished stayed "unknown" forever and
+    // coordinateNatHole reported eligible=0 with both peers online.
+    if (p2pInfos.from && p2pInfos.from.natType) {
+      commState.updatePeer(connInfo.macAddr, { natType: p2pInfos.from.natType });
     }
     if (Array.isArray(p2pInfos.to)) {
       for (const t of p2pInfos.to) {

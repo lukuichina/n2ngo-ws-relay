@@ -117,31 +117,72 @@ class MakeHoleRecords {
   }
 
   /**
-   * The entry to try next: the highest score.
+   * The entry to try next: the highest score, ties broken by rung preference.
    *
    * analysis.go:243-252. FRP breaks ties by Go map iteration order, which
    * is randomised per iteration, so a never-tried FRP pair effectively
-   * samples the ladder at random. We break ties toward the lowest index
-   * instead, which is deterministic and, together with the failure penalty
-   * in report() below, walks the ladder from the top rather than jumping
-   * around it.
+   * samples the ladder at random. We break ties deterministically instead.
    *
-   * (FRP's trailing "let the ones who are not the best at the top one by
-   * one" loop, analysis.go:254-256, is a no-op: it decrements a copy of the
-   * map value rather than the entry, so nothing is written back. It is not
-   * reproduced.)
+   * The tie-break is the fix for a ladder that could not be walked. Plain
+   * "lowest index wins" looks like it walks the ladder from the top, but it
+   * does not: every never-tried rung sits at the neutral 0, so the pair
+   * crawls 0 -> 1 -> 2 -> 3 one failed round at a time and rungs 4/5 -- the
+   * only entries that send with the socket's normal TTL, and therefore the
+   * only ones that can open a mapping across a long path -- stay at 0 and
+   * never win a tie. Measured 2026-09-30: a pair on an 11-hop path whose
+   * rung 0 carries TTL 7 reached rung 1 only after a 300s backoff, and would
+   * have needed twenty minutes to reach a rung that could work at all.
+   *
+   * So ties prefer, in order: rung 0 (cheapest, and correct for the consumer
+   * routers TTL 7 was designed for, so short-path pairs keep today's
+   * behaviour), then the no-TTL rungs, then the remaining untried TTL variants.
+   *
+   * Nothing here can promote a rung that has actually failed -- a rung that
+   * scored -1 is no longer tied with the untried ones and loses on score
+   * alone. The preference only ever reorders entries that are genuinely
+   * untried, so the ladder is still walked in full, just without a 300s
+   * penalty per step.
    */
   recommand() {
     let best = 0;
     let bestScore = -Infinity;
+    let bestRank = -Infinity;
     for (const [index, score] of this.scores) {
-      if (score > bestScore) {
+      const rank = rungPreference(index);
+      if (score > bestScore || (score === bestScore && rank > bestRank)) {
         bestScore = score;
+        bestRank = rank;
         best = index;
       }
     }
     return best;
   }
+}
+
+/**
+ * Tie-break ranking used by MakeHoleRecords.recommand().
+ *
+ * Only consulted for entries that are tied on score, so it reorders
+ * never-tried rungs and can never resurrect one that already failed.
+ *
+ *   3 -- rung 0: the cheapest entry, correct wherever the NAT translates at
+ *        hop 1. Kept first so short-path pairs behave exactly as they did.
+ *   2 -- rungs 4/5: no TTL, so a normal full-path packet. These work on a
+ *        long path, which the TTL-7 and TTL-4 entries cannot.
+ *   1 -- the remaining TTL-lowering rungs, which only pay off on a short path.
+ */
+function rungPreference(index) {
+  if (index === 0) return 3;
+  if (isNoTTLRung(index)) return 2;
+  return 1;
+}
+
+/** True for the ladder entries that send with the socket's normal TTL. */
+function isNoTTLRung(index) {
+  return (
+    index === NAT_HOLE_BEHAVIOR_NO_TTL_SENDER_FIRST ||
+    index === NAT_HOLE_BEHAVIOR_NO_TTL_RECEIVER_FIRST
+  );
 }
 
 /** Every index either ladder can use. */
@@ -203,7 +244,28 @@ export class NatHoleAnalyzer {
    */
   report(key, index, succeeded) {
     const rec = this._record(key);
-    rec.makeHoleRecords.add(index, succeeded ? 2 : -1);
+    // Success credits +2, failure debits -2: symmetric.
+    //
+    // FRP only ever calls ReportSuccess (controller.go:265), so it has no
+    // failure penalty to calibrate and 2/-1 was chosen to preserve FRP's
+    // scoring on the success path. But we do penalise failure here, and the
+    // asymmetry turns a working rung into a trap: a rung that once punched
+    // successfully climbs to +2 per success, and each later failure gives back
+    // only 1, so it stays above the neutral 0 that every untried rung sits at
+    // and keeps winning recommandation outright.
+    //
+    // Combined with the escalating backoff (15s doubling to a 300s cap), a
+    // rung holding +6 needs six consecutive failures to fall back to neutral,
+    // which at that backoff schedule is roughly twenty minutes. Measured
+    // 2026-09-30: after both edges restarted, the pair reported score 6 -> 5
+    // -> 4 on rung 0 across three rounds while every other rung stayed at 0,
+    // so rung 0 was re-dispatched indefinitely and the pair never reached the
+    // no-TTL rungs that a NAT-tedious pair needs.
+    //
+    // A symmetric penalty halves that to three rounds, which fits inside the
+    // backoff's early, cheap steps. Success scoring is unchanged, so a rung
+    // that genuinely works is promoted exactly as before.
+    rec.makeHoleRecords.add(index, succeeded ? 2 : -2);
     return rec.makeHoleRecords.get(index);
   }
 

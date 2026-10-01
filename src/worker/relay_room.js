@@ -58,6 +58,12 @@ export class RelayRoom {
     this.lastCacheSaveTime = 0;
     this.saveAlarmScheduled = false;
 
+    // Earliest NAT-hole stagger deadline that has been armed but not yet
+    // fired. Durable Object alarms are single-slot and both the save timer and
+    // the stagger wake write to it, so this field is what keeps a scheduled
+    // stagger from being overwritten by the periodic save.
+    this.pendingStaggerAt = null;
+
     // 登录失败计数 (用于 /room 页面保护)
     this.loginAttempts = new Map();
 
@@ -584,6 +590,21 @@ export class RelayRoom {
       );
     }
 
+    // A stagger wake that armStaggerWake() already recorded but that has not
+    // fired yet outranks the periodic save, whatever _nextStaggerDeadline()
+    // currently reports. The two disagree exactly in the race that matters:
+    // armStaggerWake() records the deadline, then the pair's backoff entry is
+    // consumed or cleared, and the deadline would silently vanish from the
+    // handler's view while the wake is still owed. Honour the recorded value
+    // so the single alarm slot can never be won by the save timer.
+    if (this.pendingStaggerAt != null && this.pendingStaggerAt < wakeAt) {
+      wakeAt = this.pendingStaggerAt;
+      logger.debug(
+        `[Alarm] Shortened next wake to ${Math.max(0, (wakeAt - Date.now()) / 1000)}s ` +
+        `for recorded pending NAT-hole stagger`
+      );
+    }
+
     await this.state.storage.setAlarm(wakeAt);
     this.saveAlarmScheduled = true;
     logger.debug(`[Alarm] Scheduled save in ${(wakeAt - Date.now()) / 1000}s`);
@@ -591,11 +612,22 @@ export class RelayRoom {
 
   async alarm() {
     try {
+      // This alarm is firing, so any recorded stagger deadline is being paid
+      // off now. Drop it before re-coordinating: reBroadcastNatHoleInstructions()
+      // below runs the decision pass, which will re-arm through armStaggerWake()
+      // if the pair is still gated.
+      this.pendingStaggerAt = null;
       await this.saveAppCache();
-      await this.setupSaveAlarm();
       // Periodic NAT hole re-coordination: re-broadcast instructions for
       // peers that haven't established FullDuplex yet.
+      //
+      // Runs BEFORE setupSaveAlarm() on purpose. This alarm may have been the
+      // stagger wake, and re-coordinating can arm a fresh one for a pair that
+      // is still gated; letting the decision pass go first means the alarm we
+      // schedule afterwards accounts for it, rather than relying on the
+      // pendingStaggerAt fallback to catch the ordering.
       await this.reBroadcastNatHoleInstructions();
+      await this.setupSaveAlarm();
     } catch (e) {
       logger.error("[Alarm] Failed:", e);
       try { await this.setupSaveAlarm(); } catch (_) {}
@@ -640,12 +672,22 @@ export class RelayRoom {
     if (at == null) return;
     const now = Date.now();
     const delay = Math.max(0, at - now);
+
+    // Record the deadline before touching storage, so a setupSaveAlarm() that
+    // is already awaiting setAlarm() cannot lose it. Durable Object alarms are
+    // single-slot and both writers go through the same slot, so without this
+    // field the save alarm simply overwrites the stagger wake and the pair
+    // stalls until the next periodic save (observed: a 1s stagger armed at
+    // 12:29:47.843 was overwritten by a 300s save alarm 159ms later, and the
+    // instruction was not emitted until 12:34:50 -- five minutes of silence
+    // for a one-second window).
+    this.pendingStaggerAt =
+      this.pendingStaggerAt == null ? at : Math.min(this.pendingStaggerAt, at);
+
     const current = await this.state.storage.getAlarm();
     if (current != null && current <= at) {
       return; // an earlier wake is already pending
     }
-    // Durable Object alarms are single-slot: re-arming replaces the save
-    // alarm, so chain the save alarm back in afterwards.
     await this.state.storage.setAlarm(at);
     logger.debug(
       `[Alarm] Stagger wake armed in ${(delay / 1000).toFixed(1)}s ` +

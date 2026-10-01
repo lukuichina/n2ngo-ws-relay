@@ -65,11 +65,37 @@ const DetectRoleReceiver = 1;
 // Hardcoded because the relay runs as a worker with no access to that package.
 const P2P_UNAVAILABLE = 4;
 
+// P2PCapacity.FullDuplex — same mirrored enum. The success report is only
+// meaningful while the tunnel it described is still up on *both* sides, and
+// a keepalive demotion lands on P2PAvailable(2), not on Unavailable(4), so the
+// retirement test below needs this value to tell "still up" from "fell back".
+const P2P_FULLDUPLEX = 3;
+
 // How long a freshly recorded success is immune to retirement. A punch takes
 // a moment to reach full duplex on both sides, and demotion reports can
 // arrive out of order; without this the relay can retire a success it
 // recorded moments earlier.
 const SUCCESS_GRACE_MS = 30000;
+
+// Ceiling on the escalating retry backoff for a pair that has not punched yet.
+//
+// Was 300000 (5 minutes). The escalation is 15s, 30s, 60s, 120s, 240s, then
+// the cap -- so a pair whose first rounds fail waits the full ~12.75 minutes
+// before the relay tries again.
+//
+// That ceiling buys nothing. Each round re-punches the same NAT mapping with
+// the same addresses, so round N and round N+6 do not differ in any way that
+// raises the odds: an exhausted ladder rung has not become less likely to work
+// just because more minutes have passed. Doubling only adds delay before the
+// one round that would have succeeded anyway. Measured 2026-09-30: E1/E2 over
+// EasyNAT with correct addresses throughout, FRP punched through on its first
+// round (3s) while n2n-go burned 5 attempts across 6 backoff rounds for 11m42s
+// and then succeeded on the round that was identical to the ones that failed.
+//
+// 60s keeps the escalation meaningful -- still enough for a NAT mapping to be
+// re-established or a peer's assisted address to come up -- while bounding the
+// wait after a transient failure to about a minute instead of twelve.
+const NAT_HOLE_BACKOFF_CAP_MS = 60000;
 
 /**
  * Decide whether a recorded punch success no longer describes a live tunnel.
@@ -97,7 +123,20 @@ const SUCCESS_GRACE_MS = 30000;
  */
 export function shouldRetireSuccess(senderStatus, receiverStatus, priorReport, now) {
   if (!priorReport || priorReport.state !== 3) return false;
-  if (senderStatus !== P2P_UNAVAILABLE && receiverStatus !== P2P_UNAVAILABLE) {
+  // A recorded success is only worth keeping while the tunnel it described is
+  // still up on BOTH sides. The demotion path is SetFullDuplex(false), which
+  // writes P2PAvailable(2) -- it never produces P2PUnavailable(4). Gating on 4
+  // alone therefore treats "demoted to relay" as "still alive": the success is
+  // never retired, the `reported.state === 3` gate in coordinateNatHole keeps
+  // `continue`-ing the pair, and no punch instruction is ever emitted again.
+  //
+  // Symmetric on purpose: a one-sided demotion already means one edge is no
+  // longer confirming the tunnel, and it demotes too once its own keepalive
+  // expires. Waiting for the second demotion would only delay the re-punch by
+  // one keepalive timeout, and keeping the success while either side is still
+  // up would leave this bug alive for any pair where only one edge notices the
+  // drop first.
+  if (senderStatus === P2P_FULLDUPLEX && receiverStatus === P2P_FULLDUPLEX) {
     return false;
   }
   return now - (priorReport.at || 0) > SUCCESS_GRACE_MS;
@@ -365,7 +404,7 @@ function isCoordEligible(peer, p2pInfos) {
 // moment the relay pushes both instructions simultaneously, each side punches
 // before the other's mapping exists, and the packets are dropped -- exactly
 // what was observed (6 rounds x 5 attempts, all lost, backoff escalated to its
-// 5-minute cap). Staggering by a few seconds lets the newcomer's mapping form
+// cap). Staggering by a few seconds lets the newcomer's mapping form
 // first.
 //
 // Measured: with the edges started 9s apart the punch succeeded on the first
@@ -517,7 +556,7 @@ export class PacketHandler {
    * Called when a peer disconnects or reconnects. Without this, a pair that
    * had already punched successfully keeps a "PunchStateSucceeded" report and
    * a multi-minute backoff entry, so coordinateNatHole() skips it and the
-   * reconnected edge waits out the remaining backoff (observed: ~5 minutes of
+   * reconnected edge waits out the remaining backoff (observed: minutes of
    * silence after a restart, which looks exactly like a broken punch).
    *
    * A reconnect changes the NAT mapping and the STUN-derived addresses, so
@@ -550,22 +589,104 @@ export class PacketHandler {
     }
   }
 
+  /**
+   * Run a NAT-hole decision pass right after `macAddr` registers.
+   *
+   * Unconditional with respect to the pair's history: by the time this runs,
+   * clearPairStateFor() has removed the backoff entry, the recorded punch
+   * state and the failure streak, so a pair whose previous session ended in
+   * failure starts from the first rung again instead of waiting out a
+   * cooldown. A fresh process has a fresh NAT mapping, so the old outcome
+   * genuinely does not describe it.
+   *
+   * Failures are logged and swallowed: a registration must succeed even if
+   * hole-punch coordination is broken, and the next P2PStateInfo from either
+   * side will drive the same pass anyway.
+   */
+  coordinateNatHoleOnRegister(commState, macAddr) {
+    try {
+      const instructions = this.coordinateNatHole(commState);
+      if (instructions.size === 0) {
+        console.log(
+          `[coordinateNatHole] post-register pass for ${macAddr} produced no instruction ` +
+          `(no eligible peers, or the stagger gate is still holding the pair)`
+        );
+        return;
+      }
+      this.broadcastNatHoleInstructions(commState, instructions)
+        .then(() => {
+          console.log(
+            `[coordinateNatHole] post-register pass for ${macAddr} dispatched ` +
+            `${instructions.size} instruction(s)`
+          );
+        })
+        .catch((e) => {
+          console.error(
+            `[coordinateNatHole] post-register dispatch for ${macAddr} failed:`,
+            e
+          );
+        });
+    } catch (e) {
+      console.error(
+        `[coordinateNatHole] post-register pass for ${macAddr} failed:`,
+        e
+      );
+    }
+  }
+
   recordPunchResult(reporterMAC, peerMAC, result) {
     if (!reporterMAC || !peerMAC || !result) return;
     const key = [reporterMAC, peerMAC].sort().join("|");
     const state = typeof result.state === "number" ? result.state : 0;
     if (state === 0) return; // PunchStateNone carries no information
+
+    // Which rung this outcome belongs to.
+    //
+    // Taken from the rung WE dispatched, not from the edge's report. The edge
+    // fills in its own view of the current rung at the moment it reports, and
+    // that view is not the rung it was told to run: the report is asynchronous,
+    // it can be delayed behind a reconnect, and the edge restarts and loses it
+    // entirely. Crediting the analyzer with that number puts the credit on a
+    // strategy that may never have run, and since recommandation is read off
+    // these scores the pair then walks a ladder that has nothing to do with
+    // what was actually attempted.
+    //
+    // Observed 2026-09-30 with E1/E2: coordinateNatHole logged a
+    // "rung 0->4" re-arm and then recordPunchResult reported "failed on
+    // ladder index 0" four times in a row, which cannot happen if the report
+    // described the dispatched rung. The scores walked down to -8 and
+    // recommandation started emitting rungs at random (0,1,2,3,6,7,8,9,7,8,
+    // 0,4,5) instead of escalating, so the pair never held a rung long
+    // enough to punch and both ends stayed at P2PStatus=Unavailable.
+    //
+    // Falls back to the reported value only when we have no dispatch record
+    // for this pair at all, which is the pre-existing-strategy-memory case.
+    // The dispatch side keys on pairKeyFor(), which lower-cases; the state
+    // slot above does not. Try the exact key first, then the normalised one,
+    // so a MAC that arrives upper-cased still finds its dispatch record.
+    const dispatchedRung = this._lastDispatchedRung
+      ? (this._lastDispatchedRung.get(key) ??
+        this._lastDispatchedRung.get(pairKeyFor(reporterMAC, peerMAC)))
+      : undefined;
+    const rung =
+      typeof dispatchedRung === "number"
+        ? dispatchedRung
+        : typeof result.behaviorIndex === "number"
+          ? result.behaviorIndex
+          : null;
+
+    // Do not clobber a good rung with a report that carries none. The slot is
+    // per-pair, not per-(pair,rung), so overwriting it with null would erase
+    // the record of the strategy that actually ran.
+    const prev = this.natHolePunchState.get(key);
     this.natHolePunchState.set(key, {
       state,
       attempts: result.attempts || 0,
       detail: result.detail || "",
       at: Date.now(),
       // The rung this outcome belongs to, so the analyzer's credit lands on
-      // the strategy that actually ran. Written down when the instruction
-      // goes out; absent means the report predates strategy memory, in which
-      // case there is nothing meaningful to credit.
-      behaviorIndex:
-        typeof result.behaviorIndex === "number" ? result.behaviorIndex : null,
+      // the strategy that actually ran. Null when neither side knew.
+      behaviorIndex: rung != null ? rung : prev ? prev.behaviorIndex : null,
     });
     if (state === 3) {
       // Tunnel is up: drop every piece of per-pair retry state so a later
@@ -756,6 +877,17 @@ export class PacketHandler {
         const behaviorIndex = this.natHoleAnalyzer.recommand(ladderKey);
         const result = decideNatHoleRoles(eligible[i], eligible[j], behaviorIndex);
         if (!result) continue;
+
+        // Which rung was ACTUALLY dispatched for this pair, read before the
+        // bookkeeping below overwrites it. Getting this wrong makes the
+        // strategy-change detection in the backoff gate below compare the
+        // current rung against itself, which is always equal -- so the backoff
+        // would never reset and the ladder would stay stuck on the rung that
+        // just failed.
+        const lastRung = this._lastDispatchedRung
+          ? this._lastDispatchedRung.get(ladderKey)
+          : undefined;
+        const strategyChanged = lastRung !== undefined && lastRung !== behaviorIndex;
         this._lastDispatchedRung = this._lastDispatchedRung || new Map();
         this._lastDispatchedRung.set(ladderKey, behaviorIndex);
 
@@ -774,7 +906,7 @@ export class PacketHandler {
         //
         // Instead: pubSocket is deliberately excluded, and a pair is retried
         // early only when it previously SUCCEEDED (P2PStatus shows the tunnel
-        // is up). Genuine NAT port changes are picked up by the 5-minute cap.
+        // is up). Genuine NAT port changes are picked up by the backoff cap.
         const pairKey = [result.senderMAC, result.receiverMAC].sort().join("|");
         // The rung is part of the signature on purpose. A pair that has just
         // been told to try a different ladder entry must not be suppressed by
@@ -896,13 +1028,14 @@ export class PacketHandler {
 
         // 2 == PunchStateFailed: the round just burned out. Re-arm now rather
         // than waiting out the accumulated backoff, but keep the escalating
-        // schedule so a pair that can never punch degrades to the 5-minute
-        // cap instead of spinning.
+        // schedule so a pair that can never punch degrades to the cap
+        // instead of spinning.
         if (reported && reported.state === 2) {
           const attempts = this.natHolePunchState.get(pairKey).attempts || 0;
           const backoffMs = Math.min(
-            Math.max(15000, attempts * 1000) * Math.pow(2, this._failStreak(pairKey)),
-            300000
+            Math.max(15000, attempts * 1000) *
+              Math.pow(2, this._failStreak(pairKey)),
+            NAT_HOLE_BACKOFF_CAP_MS
           );
           this.natHoleBackoff.set(pairKey, {
             nextAllowedAt: now + backoffMs,
@@ -911,23 +1044,34 @@ export class PacketHandler {
           });
           console.log(
             `[coordinateNatHole] pair ${pairKey} re-armed after failure ` +
-            `(attempts=${attempts}, backoff=${backoffMs}ms)`
+            `(attempts=${attempts}, rung ${lastRung}->${behaviorIndex}` +
+            `${strategyChanged ? ", strategy changed" : ""}, backoff=${backoffMs}ms)`
           );
         }
 
         const prev = this.natHoleBackoff.get(pairKey);
-        if (prev && prev.signature === signature && now < prev.nextAllowedAt) {
+        if (
+          prev &&
+          prev.signature === signature &&
+          !strategyChanged &&
+          now < prev.nextAllowedAt
+        ) {
           // SUPPRESSED: within backoff window (this is the path that stops
           // the broadcast storm).
           continue; // still cooling down
         }
 
         // First attempt after a reset: 15s (matches the edge's own
-        // 5-attempt punch window). Each further failure doubles it, capped
-        // at 5 minutes so a pair whose NAT mapping has since changed still
-        // gets retried.
-        const backoffMs = prev && prev.signature === signature
-          ? Math.min(prev.backoffMs * 2, 300000)
+        // 5-attempt punch window). Each further failure doubles it, capped at
+        // NAT_HOLE_BACKOFF_CAP_MS so a pair whose NAT mapping has since
+        // changed still gets retried.
+        //
+        // The signature already carries the rung, so a changed rung always
+        // lands here on the 15s path -- including when strategyChanged is
+        // false but the pair is resuming after a silence long enough for
+        // nextAllowedAt to have passed.
+        const backoffMs = prev && prev.signature === signature && !strategyChanged
+          ? Math.min(prev.backoffMs * 2, NAT_HOLE_BACKOFF_CAP_MS)
           : 15000;
         this.natHoleBackoff.set(pairKey, {
           nextAllowedAt: now + backoffMs,
@@ -1264,6 +1408,24 @@ export class PacketHandler {
         reannounce.catch(() => {});
       }
     }
+
+    // A (re)registration is an unconditional instruction to re-coordinate
+    // every pair this edge belongs to.
+    //
+    // clearPairStateFor() above already dropped the backoff, the punch state,
+    // the failure streak and the analyzer credit, so nothing here can be
+    // suppressed by a cooldown computed for the previous session. Driving the
+    // decision pass explicitly is what makes that reset actually observable:
+    // coordinateNatHole() otherwise only runs when some edge happens to send
+    // P2PStateInfo, and after a restart both sides go quiet — the newcomer
+    // behind its own post-register burst, the incumbent because nothing
+    // changed for it. Observed as a restart that waited out a full backoff
+    // window before punching.
+    //
+    // The stagger gate may still hold the pair back for NAT_PUNCH_STAGGER_MS
+    // after this registration, which is correct and cheap (1s by default): it
+    // arms its own wake through armStaggerWake().
+    this.coordinateNatHoleOnRegister(commState, req.edgeMACAddr);
 
     console.log(`[PacketHandler] ${req.edgeMACAddr} registered (isNew=${isNew}) with virtual IP ${numberToIp(virtualIP)}`);
   }

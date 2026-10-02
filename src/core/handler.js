@@ -1046,6 +1046,7 @@ export class PacketHandler {
         // than waiting out the accumulated backoff, but keep the escalating
         // schedule so a pair that can never punch degrades to the cap
         // instead of spinning.
+        let rearmWakeAt = null;
         if (reported && reported.state === 2) {
           const attempts = this.natHolePunchState.get(pairKey).attempts || 0;
           const backoffMs = Math.min(
@@ -1053,15 +1054,43 @@ export class PacketHandler {
               Math.pow(2, this._failStreak(pairKey)),
             NAT_HOLE_BACKOFF_CAP_MS
           );
+          // Escalate from the window that is actually in force, not from the
+          // value this branch is about to write.
+          //
+          // This branch runs on every inbound P2PStateInfo (edges send one
+          // every 2s), and the backoff gate below reads the SAME key this
+          // branch writes. Before the fix, each pass wrote now+backoffMs and
+          // then the gate compared `now < now+backoffMs` against that fresh
+          // value, so the pair suppressed itself on every single pass and
+          // re-armed to 60s forever: a self-perpetuating backoff that could
+          // never expire. Observed in the field as three consecutive
+          // "re-armed after failure (backoff=60000ms)" lines with no
+          // "scheduled" line following any of them.
+          //
+          // Growing from `previous` keeps the escalation monotonic across
+          // passes: each one lengthens the window rather than resetting it to
+          // a fresh 60s from "now", so a pair that can never punch still
+          // reaches the cap and stops.
+          const previous = this.natHoleBackoff.get(pairKey);
+          const escalating =
+            previous &&
+            previous.signature === signature &&
+            !strategyChanged &&
+            previous.backoffMs > 0;
+          const armedMs = escalating
+            ? Math.min(Math.max(previous.backoffMs, backoffMs), NAT_HOLE_BACKOFF_CAP_MS)
+            : backoffMs;
+
+          rearmWakeAt = now + armedMs;
           this.natHoleBackoff.set(pairKey, {
-            nextAllowedAt: now + backoffMs,
-            backoffMs,
+            nextAllowedAt: rearmWakeAt,
+            backoffMs: armedMs,
             signature,
           });
           console.log(
             `[coordinateNatHole] pair ${pairKey} re-armed after failure ` +
             `(attempts=${attempts}, rung ${lastRung}->${behaviorIndex}` +
-            `${strategyChanged ? ", strategy changed" : ""}, backoff=${backoffMs}ms)`
+            `${strategyChanged ? ", strategy changed" : ""}, backoff=${armedMs}ms)`
           );
         }
 
@@ -1076,22 +1105,30 @@ export class PacketHandler {
           // the broadcast storm).
           //
           // But coordinateNatHole() only runs when a P2PStateInfo arrives,
-          // and an edge waiting for an instruction punches nothing and
+          // and an edge that is waiting for an instruction punches nothing and
           // therefore reports nothing. So this continue used to be terminal:
           // the window would expire with nothing left to notice it, the pair
           // would never be re-decided, and no instruction would ever be sent
           // again. Observed in the field as a pair stuck on relay for 13+
-          // minutes -- last punch at 03:53:30, relay log full of
-          // "re-armed after failure" and never a "scheduled" line.
+          // minutes with its last punch at 03:53:30 and only
+          // "re-armed after failure" in the relay log -- never "scheduled".
           //
           // armStaggerWake is the wake this path was missing. It is not
           // stagger-specific: the alarm handler runs
-          // reBroadcastNatHoleInstructions(), which is the full decision pass,
-          // so the pair gets re-decided the moment its window closes.
-          if (this.relayRoom && typeof this.relayRoom.armStaggerWake === "function") {
-            this.relayRoom.armStaggerWake(prev.nextAllowedAt).catch((e) =>
-              console.error("[coordinateNatHole] backoff wake arm failed:", e)
-            );
+          // reBroadcastNatHoleInstructions(), which is the full decision pass.
+          // Arm it for the window's own deadline, and take the minimum with
+          // any deadline the re-arm branch just recorded so the single alarm
+          // slot is never won by the later one.
+          {
+            const wakeAt = prev.nextAllowedAt;
+            const due = rearmWakeAt != null ? Math.min(rearmWakeAt, wakeAt) : wakeAt;
+            if (this.relayRoom && typeof this.relayRoom.armStaggerWake === "function") {
+              this.relayRoom
+                .armStaggerWake(due)
+                .catch((e) =>
+                  console.error("[coordinateNatHole] backoff wake arm failed:", e)
+                );
+            }
           }
           continue; // still cooling down
         }
@@ -1629,14 +1666,6 @@ export class PacketHandler {
     // so relaying it lets peers punch to a reachable address.
     if (p2pInfos.from && p2pInfos.from.observedRaddr) {
       commState.updatePeer(connInfo.macAddr, { observedRaddr: p2pInfos.from.observedRaddr });
-    }
-    // Same registration-timing trap as pubSocket/p2pEndpoint above, and it
-    // gates hole punching outright: isCoordEligible rejects any peer whose
-    // natType is neither HardNAT nor EasyNAT, so an edge that registered
-    // before STUN/NAT classification finished stayed "unknown" forever and
-    // coordinateNatHole reported eligible=0 with both peers online.
-    if (p2pInfos.from && p2pInfos.from.natType) {
-      commState.updatePeer(connInfo.macAddr, { natType: p2pInfos.from.natType });
     }
     if (Array.isArray(p2pInfos.to)) {
       for (const t of p2pInfos.to) {

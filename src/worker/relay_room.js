@@ -248,7 +248,32 @@ export class RelayRoom {
         this.packetHandler.clearPairStateFor(connInfo.macAddr);
 
         // 广播下线通知
-        await this.packetHandler.broadcastPeerInfo(commState, { macAddr: connInfo.macAddr }, 3); // PeerInfoEvent.TypeUnregister
+        //
+        // 第四个参数 peerOverride 是必须的，不能省。Go 端
+        // HandlePeerInfoList 的 case TypeUnregister 会删除 payload 里列出的
+        // **每一个** MAC（只跳过自己自己），而 broadcastPeerInfo 在
+        // peerOverride 为空时回退到 getOnlinePeers() —— 也就是"留下来的那些
+        // 节点"。于是一个节点下线会变成对全网每一个 peer 的注册表清空：
+        //
+        //   eventType=3 registeringMac=52:eb onlinePeers=4
+        //     payloadMacs=[0a:e3, aa:bc, ea:2f, 9e:6e]
+        //
+        // 2026-10-02 实测：log5 下线后，log3 被删掉了 E1 和 log4，log4 被删掉
+        // 了 E1 和 log3，两者已验证的 P2PRaddr 与 FullDuplex 一并清零，1 秒后
+        // 重注册却只能从 Unknown 重新协商，于是 log3<->log4 从 17ms 掉回
+        // Cloudflare 中继。与 log5 毫无关系的节点被它的下线连坐了。
+        //
+        // handler.js 的 handleUnregister 早就修好了这一点，这里是漏网的第二个
+        // 调用点——两者必须同时传 peerOverride，否则修一边等于没修。
+        //
+        // 注意顺序：peer 必须在 unregisterPeer() 之前取出（见上方第 237 行），
+        // 因为 unregisterPeer 会把它从 registry 里摘掉。
+        await this.packetHandler.broadcastPeerInfo(
+          commState,
+          { macAddr: connInfo.macAddr },
+          3, // PeerInfoEvent.TypeUnregister
+          peer ? [peer] : null,
+        );
       }
     }
 

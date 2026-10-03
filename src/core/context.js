@@ -10,6 +10,41 @@
 import { IPAM } from "./ipam.js";
 import { numberToIp, parseMAC } from "./constants.js";
 
+/**
+ * Reports whether an observed source address must be dropped because the peer
+ * moved to a different public mapping.
+ *
+ * The rule, not the mutation, so it can be tested without a Durable Object.
+ *
+ * An observed source address describes the socket a peer was using when we saw
+ * a packet from it. A peer that re-registers behind a different public mapping
+ * has either restarted or had its NAT rotate the port, so that socket is gone
+ * and the address belongs to it. Left in place it makes the record lie:
+ * observed 2026-10-03 for log3, which carried
+ * observedRaddr=111.101.5.1:63654 against pubSocket=111.101.5.1:53781, :63654
+ * being the previous process's port. E1 and E2 were punching it 101 and 81
+ * times respectively.
+ *
+ * Both sides must be non-empty and different. An unchanged re-announcement
+ * says nothing about whether the socket is still open, and peers re-register
+ * constantly -- expiring on those would blank the field on every tick, and on a
+ * symmetric NAT it is the only address worth having.
+ *
+ * @param {object} current the peer's stored record
+ * @param {object} updates the fields about to be written
+ * @returns {boolean} true when the stored observedRaddr is no longer valid
+ */
+export function observedRaddrInvalidatedBy(current, updates) {
+  return Boolean(
+    updates &&
+      updates.pubSocket &&
+      current &&
+      current.pubSocket &&
+      updates.pubSocket !== current.pubSocket &&
+      current.observedRaddr
+  );
+}
+
 export class CommunityState {
   constructor(community, relayRoom, networkConfig) {
     this.community = community;
@@ -174,6 +209,25 @@ export class CommunityState {
     const normalizedMAC = macAddr.toLowerCase();
     const peer = this.peers.get(normalizedMAC);
     if (!peer) return false;
+
+    // An observed source address describes a socket, and a restarted peer's
+    // socket is closed. Drop it rather than carrying a dead address into the
+    // next decision -- see observedRaddrInvalidatedBy, which holds the rule
+    // and the recorded evidence.
+    //
+    // This does not by itself stop the address coming back: a peer that still
+    // holds a pre-restart raddr for its counterpart republishes it in
+    // PeerP2PInfos. The edge gates that on the same rule before reporting it
+    // (pkg/p2p/p2p.go, PeerInfosForBroadcast), and this line is what keeps the
+    // record honest in between.
+    if (observedRaddrInvalidatedBy(peer, updates)) {
+      console.log(
+        `[Community-${this.community}] ${normalizedMAC} public mapping ` +
+          `${peer.pubSocket} -> ${updates.pubSocket}; dropping observed raddr ` +
+          `${peer.observedRaddr} (it belongs to the socket that just went away)`
+      );
+      peer.observedRaddr = "";
+    }
 
     Object.assign(peer, updates, { lastSeen: Math.floor(Date.now() / 1000) });
     // 持久化更新，防止 DO 重建后状态丢失

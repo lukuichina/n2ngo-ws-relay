@@ -77,6 +77,17 @@ const P2P_FULLDUPLEX = 3;
 // recorded moments earlier.
 const SUCCESS_GRACE_MS = 30000;
 
+// How long an InProgress report stays authoritative before the relay stops
+// waiting on the round it describes.
+//
+// The edge refreshes the report's `at` once per attempt (p2p.go, detail
+// "retrying"), so a round that is genuinely progressing never reaches this
+// deadline no matter how long it runs. Only a round that stopped reporting
+// without ever producing a terminal state gets here -- a wedged edge, or one
+// that vanished mid-round. 60s is far beyond the 5 attempts at ~3s that the
+// edge's own punch loop needs for its slowest round.
+const PUNCH_INPROGRESS_TIMEOUT_MS = 60000;
+
 // Ceiling on the escalating retry backoff for a pair that has not punched yet.
 //
 // Was 300000 (5 minutes). The escalation is 15s, 30s, 60s, 120s, 240s, then
@@ -140,6 +151,53 @@ export function shouldRetireSuccess(senderStatus, receiverStatus, priorReport, n
     return false;
   }
   return now - (priorReport.at || 0) > SUCCESS_GRACE_MS;
+}
+
+/**
+ * Decide whether the relay must hold off re-dispatching because a punch round
+ * is already in flight on one of the two edges.
+ *
+ * InProgress(1) means "a round started, no verdict yet" — not "this pair is
+ * failing". The relay used to ignore that distinction and emit a fresh
+ * instruction on every inbound P2PStateInfo (edges send one every 2s), which
+ * on 2026-10-03 produced 45 byte-identical instructions at a flat 2s cadence
+ * for 90 seconds on a pair that was already FullDuplex on both sides. The
+ * relay trace shows the self-sustaining loop:
+ *
+ *   succeeded on ladder index 1 -> score 10
+ *   in-progress ... punch dispatched to 172.22.1.17:64165
+ *   scheduled (...@1), backoff=15000ms
+ *
+ * Each round's InProgress overwrote state 3 in this map, so the success gate
+ * in coordinateNatHole() missed on the next pass and re-dispatched; the edge
+ * receiving that instruction opened another round and reported InProgress
+ * again. p2p.go spells out the intended contract — "On the relay side state 1
+ * is deliberately inert: recordPunchResult skips the failCount increment and
+ * the backoff re-arm (both are state 2 only)" — but only those two arms were
+ * made inert; the state write itself was not.
+ *
+ * So InProgress has to mean what it says. Hold, and let the terminal report
+ * (2 = Failed, 3 = Succeeded) drive the next decision — both paths already
+ * exist below.
+ *
+ * The one escape is a stalled round: an edge that stops reporting entirely,
+ * never producing 2 or 3. Waiting forever on that would strand the pair, so a
+ * report that has not been refreshed within timeoutMs is treated as dead and
+ * the caller re-coordinates.
+ *
+ * @param {{state:number, at:number}|undefined} reported recorded outcome, if any
+ * @param {number} now epoch ms
+ * @param {number} [timeoutMs]
+ * @returns {{hold:boolean, reason:string, wakeAt?:number}}
+ */
+export function shouldHoldForInProgress(reported, now, timeoutMs = PUNCH_INPROGRESS_TIMEOUT_MS) {
+  if (!reported || reported.state !== 1) return { hold: false, reason: "not-in-progress" };
+  const wakeAt = (reported.at || 0) + timeoutMs;
+  if (now >= wakeAt) {
+    // Stalled: the edge stopped refreshing, so no terminal report is coming.
+    return { hold: false, reason: "stalled" };
+  }
+  return { hold: true, reason: "round-in-flight", wakeAt };
 }
 
 // ClassifyFeatureCount equivalent of FRP's ClassifyFeatureCount.
@@ -1040,6 +1098,32 @@ export class PacketHandler {
         // this pair entirely until an edge reports otherwise.
         if (reported && reported.state === 3) {
           continue;
+        }
+
+        // 1 == PunchStateInProgress: a round is already running. Emitting now
+        // would stack a second round on the first, and the InProgress each
+        // round reports would overwrite whatever the other edge just recorded
+        // -- the 2s re-dispatch loop described in shouldHoldForInProgress().
+        // Wait for the terminal report and re-decide on it.
+        const inProgressHold = shouldHoldForInProgress(reported, now);
+        if (inProgressHold.hold) {
+          // coordinateNatHole() only runs on an inbound P2PStateInfo, so
+          // without a wake a round that ends while the edges go quiet would
+          // never be re-decided. Arm the round's own deadline.
+          if (this.relayRoom && typeof this.relayRoom.armStaggerWake === "function") {
+            this.relayRoom
+              .armStaggerWake(inProgressHold.wakeAt)
+              .catch((e) =>
+                console.error("[coordinateNatHole] in-progress wake arm failed:", e)
+              );
+          }
+          continue; // round in flight, waiting on Failed or Succeeded
+        }
+        if (inProgressHold.reason === "stalled") {
+          console.log(
+            `[coordinateNatHole] pair ${pairKey} in-progress stale for ` +
+            `${Math.round((now - reported.at) / 1000)}s with no terminal report — re-coordinating`
+          );
         }
 
         // 2 == PunchStateFailed: the round just burned out. Re-arm now rather

@@ -108,6 +108,31 @@ const PUNCH_INPROGRESS_TIMEOUT_MS = 60000;
 // wait after a transient failure to about a minute instead of twelve.
 const NAT_HOLE_BACKOFF_CAP_MS = 60000;
 
+// How long the relay keeps a just-dispatched rung on the in-flight list before
+// deciding nobody is going to answer it and re-driving the pair.
+//
+// This is the gap shouldHoldForInProgress() cannot close. That guard reads the
+// edge's own InProgress report, but the report is a round trip: between the
+// moment we hand out an instruction and the moment it lands, natHolePunchState
+// still holds whatever was there before -- usually nothing, because a pair
+// being tried for the first time has no entry at all. coordinateNatHole() runs
+// on every inbound P2PStateInfo, and each edge emits one every 2s, so that
+// window contains several passes.
+//
+// Measured 2026-10-05 on E1<->E2: twelve byte-identical index-0 dispatches
+// (six rounds, alternating E1 then E2) before the first terminal report
+// arrived at all, and 419 of 543 dispatches on the failing log5<->E2 pair were
+// repeats of a rung already in flight. The successful pairs showed zero,
+// which is the tell: nothing about a punch that works makes the relay repeat
+// itself, so the repeats are the relay talking to itself.
+//
+// Deliberately shorter than PUNCH_INPROGRESS_TIMEOUT_MS. Once the edge's own
+// InProgress has landed, shouldHoldForInProgress() owns the pair and waits up
+// to 60s; this constant only has to outlast the report latency, so it can be
+// tight. Too long and a genuinely lost dispatch waits in silence; too short and
+// a slow edge gets a second copy of a round already under way.
+const NAT_HOLE_INFLIGHT_TIMEOUT_MS = 10000;
+
 /**
  * Decide whether a recorded punch success no longer describes a live tunnel.
  *
@@ -132,6 +157,53 @@ const NAT_HOLE_BACKOFF_CAP_MS = 60000;
  * @param {number} now epoch ms
  * @returns {boolean} true when the success is stale and should be forgotten
  */
+/**
+ * The status reporterMac currently reports for peerMac, read out of the
+ * normalised P2PStateInfo map.
+ *
+ * p2pInfos is keyed by the *reporting* edge and holds a {from, to} pair: `to`
+ * is what that edge says about each of its peers. So a side's status toward
+ * its partner is not the partner's own entry -- it is the partner's row
+ * inside the reporter's `to` list. Reading info.p2pStatus straight off the map
+ * value returns undefined forever, because the normalised object has no
+ * top-level status at all.
+ *
+ * Returns undefined when the row is absent: "not reported" is not the same as
+ * "not full duplex", and callers must decide which way to lean. For the
+ * success gate in recordPunchResult they lean towards not-full-duplex, because
+ * the whole point is to refuse a success that nothing corroborates.
+ */
+export function statusOfPeer(p2pInfos, reporterMac, peerMac) {
+  const info = p2pInfos && p2pInfos.get(reporterMac);
+  if (!info || !Array.isArray(info.to)) return undefined;
+  const row = info.to.find((x) => x && x.macAddr === peerMac);
+  return row ? row.p2pStatus : undefined;
+}
+
+/**
+ * Whether a reported PunchStateSucceeded may be banked as-is.
+ *
+ * The edge that reports success has real data-plane evidence behind it
+ * (SetFullDuplex refuses to promote without HasVerifiedDataPath), but the
+ * relay is the only component that sees both ends of the pair at once, so it
+ * is the only place the claim can be checked against the other side.
+ *
+ * Either side claiming FullDuplex is enough: a promotion is per-edge and one
+ * end can legitimately be a tick behind the other. Neither side claiming it is
+ * the case that matters -- the success describes a tunnel that nothing is
+ * currently routing over, and banking it clears the backoff, credits the
+ * analyzer and stops coordinateNatHole emitting for the pair.
+ *
+ * A missing status is treated as "not full duplex" on purpose: the whole point
+ * is to refuse a success that nothing corroborates, and an unknown status is
+ * not corroboration. That leans towards re-punching a pair that would have
+ * worked, which costs one round -- the cheap direction to be wrong in.
+ */
+export function shouldAcceptSuccess(state, senderStatus, receiverStatus) {
+  if (state !== 3) return true; // not a success; nothing to corroborate
+  return senderStatus === P2P_FULLDUPLEX || receiverStatus === P2P_FULLDUPLEX;
+}
+
 export function shouldRetireSuccess(senderStatus, receiverStatus, priorReport, now) {
   if (!priorReport || priorReport.state !== 3) return false;
   // A recorded success is only worth keeping while the tunnel it described is
@@ -198,6 +270,41 @@ export function shouldHoldForInProgress(reported, now, timeoutMs = PUNCH_INPROGR
     return { hold: false, reason: "stalled" };
   }
   return { hold: true, reason: "round-in-flight", wakeAt };
+}
+
+/**
+ * Decide whether a rung the relay already handed out is still awaiting a verdict.
+ *
+ * Unlike shouldHoldForInProgress() this asks nothing of the edge. It exists
+ * because the edge cannot answer fast enough: the dispatch and its InProgress
+ * report are separated by a full round trip, and coordinateNatHole() is invoked
+ * several times inside that window, each pass finding an empty punch state and
+ * concluding it had never tried.
+ *
+ * The rung and signature are both part of the test, so the guard releases on
+ * any real change rather than only on a timeout:
+ *
+ *   - a different rung means the ladder advanced, and the new rung has to go
+ *     out now or the advance is lost until something else moves the pair;
+ *   - a different signature means the roles flipped or the ladder index
+ *     changed under us, so the address we would send is not the one in flight.
+ *
+ * A pair whose rung is the same and whose signature is the same would produce
+ * a byte-identical instruction, so there is nothing to gain by sending it twice.
+ *
+ * @param {{rung:number, signature:string, at:number}|undefined} flight
+ * @param {{rung:number, signature:string}} candidate what we are about to send
+ * @param {number} now epoch ms
+ * @param {number} [timeoutMs]
+ * @returns {{hold:boolean, reason:string, wakeAt?:number}}
+ */
+export function shouldHoldForInFlight(flight, candidate, now, timeoutMs = NAT_HOLE_INFLIGHT_TIMEOUT_MS) {
+  if (!flight) return { hold: false, reason: "nothing-in-flight" };
+  if (flight.rung !== candidate.rung) return { hold: false, reason: "rung-changed" };
+  if (flight.signature !== candidate.signature) return { hold: false, reason: "signature-changed" };
+  const wakeAt = (flight.at || 0) + timeoutMs;
+  if (now >= wakeAt) return { hold: false, reason: "no-verdict" };
+  return { hold: true, reason: "dispatched-awaiting-verdict", wakeAt };
 }
 
 // ClassifyFeatureCount equivalent of FRP's ClassifyFeatureCount.
@@ -544,6 +651,17 @@ export class PacketHandler {
     // failure.
     this.natHolePunchState = new Map();
 
+    // Rungs handed out and not yet answered, keyed by "<macA>|<macB>" (sorted).
+    // Value: { rung, signature, at }.
+    //
+    // Distinct from natHolePunchState on purpose. That map holds what the EDGE
+    // reported and is empty for the whole report-latency window after a first
+    // dispatch, which is exactly when the relay most needs to remember that it
+    // already acted. This map is written at dispatch time, so it is populated
+    // the instant the instruction exists. recordPunchResult() deletes the entry
+    // when a verdict arrives, which is also what lets a genuine retry through.
+    this.natHoleInFlight = new Map();
+
     // Per-pair strategy memory: which rung of the FRP behaviour ladder to
     // start from for a given pair, and which rung moved last time an edge
     // reported an outcome. See nathole.js.
@@ -631,6 +749,14 @@ export class PacketHandler {
     for (const key of this.natHolePunchState.keys()) {
       if (isInKey(key)) this.natHolePunchState.delete(key);
     }
+    // In-flight rungs have to go with them: a pair whose peer disconnected can
+    // never return a verdict, so leaving the entry would make the guard wait out
+    // NAT_HOLE_INFLIGHT_TIMEOUT_MS before the (now meaningless) retry.
+    if (this.natHoleInFlight) {
+      for (const key of this.natHoleInFlight.keys()) {
+        if (isInKey(key)) this.natHoleInFlight.delete(key);
+      }
+    }
     for (const key of this._failCounts.keys()) {
       if (isInKey(key)) this._failCounts.delete(key);
     }
@@ -692,11 +818,49 @@ export class PacketHandler {
     }
   }
 
-  recordPunchResult(reporterMAC, peerMAC, result) {
+  recordPunchResult(reporterMAC, peerMAC, result, commState) {
     if (!reporterMAC || !peerMAC || !result) return;
     const key = [reporterMAC, peerMAC].sort().join("|");
-    const state = typeof result.state === "number" ? result.state : 0;
+    let state = typeof result.state === "number" ? result.state : 0;
     if (state === 0) return; // PunchStateNone carries no information
+
+    // A reported success has to be corroborated by a status report, not taken
+    // at face value.
+    //
+    // state 3 means "this edge believes the pair is direct". On the edge that
+    // is a strong claim -- SetFullDuplex refuses to promote a peer without
+    // HasVerifiedDataPath(), so it implies a real data frame crossed the
+    // direct path. But it is still one side's self-report, and the relay is
+    // the only component that sees both sides at once, so it is the only place
+    // where the claim can be checked against the other end before it is
+    // banked.
+    //
+    // Without the check, a success that nothing corroborates is banked
+    // anyway: the backoff and fail counts are cleared, the analyzer is
+    // credited, and coordinateNatHole's `reported.state === 3` gate stops
+    // emitting instructions for the pair. shouldRetireSuccess() is supposed to
+    // undo that once the tunnel goes away, but it only fires after
+    // SUCCESS_GRACE_MS and only from an inbound P2PStateInfo -- and the edge
+    // that reported the success has no reason to send another one, because
+    // from its side the pair is up. A pair that is actually pinned to the
+    // relay therefore looks successful to the relay forever.
+    //
+    // Demoting to failed here also gives the analyzer the honest outcome and
+    // lets the normal failure path re-arm the pair immediately, instead of
+    // after a grace period nobody is going to observe.
+    if (state === 3 && commState && commState.p2pInfos) {
+      const senderStatus = statusOfPeer(commState.p2pInfos, reporterMAC, peerMAC);
+      const receiverStatus = statusOfPeer(commState.p2pInfos, peerMAC, reporterMAC);
+      if (!shouldAcceptSuccess(state, senderStatus, receiverStatus)) {
+        console.log(
+          `[recordPunchResult] pair ${[reporterMAC, peerMAC].sort().join("|")} ` +
+          `reported success but neither side claims FullDuplex ` +
+          `(reporter=${senderStatus} peer=${receiverStatus}) — treating as failed`
+        );
+        state = 2;
+        result = { ...result, detail: `uncorroborated success: ${result.detail || ""}`.trim() };
+      }
+    }
 
     // Which rung this outcome belongs to.
     //
@@ -737,6 +901,12 @@ export class PacketHandler {
     // per-pair, not per-(pair,rung), so overwriting it with null would erase
     // the record of the strategy that actually ran.
     const prev = this.natHolePunchState.get(key);
+    // Any verdict clears the in-flight rung: whatever we sent has now been
+    // answered, so the pair is eligible for the next decision. This is the only
+    // thing that releases the guard on the happy path -- a rung held by
+    // NAT_HOLE_INFLIGHT_TIMEOUT_MS with no answer would otherwise have to wait
+    // out the whole timeout on every pair that behaves normally.
+    this.natHoleInFlight.delete(key);
     this.natHolePunchState.set(key, {
       state,
       attempts: result.attempts || 0,
@@ -1002,12 +1172,8 @@ export class PacketHandler {
         // info.p2pStatus straight off the map value returned undefined
         // forever, because the normalised object has no top-level status at
         // all; that made every comparison below vacuously "not full duplex".
-        const statusOf = (reporterMac, peerMac) => {
-          const info = commState.p2pInfos && commState.p2pInfos.get(reporterMac);
-          if (!info || !Array.isArray(info.to)) return undefined;
-          const row = info.to.find((x) => x && x.macAddr === peerMac);
-          return row ? row.p2pStatus : undefined;
-        };
+        const statusOf = (reporterMac, peerMac) =>
+          statusOfPeer(commState.p2pInfos, reporterMac, peerMac);
         // See shouldRetireSuccess() above for why the bar is Unavailable only.
         //
 
@@ -1041,8 +1207,22 @@ export class PacketHandler {
         }
 
         if (senderStatus === 3 || receiverStatus === 3) {
-          // 3 == full duplex: tunnel is up, no need to hold it back.
+          // 3 == full duplex: the tunnel is up, so skip this pair entirely.
+          //
+          // This used to `delete` the entry and fall through, which is not
+          // what "don't hold it back" means. The suppression check further
+          // down reads natHoleBackoff.get(pairKey); deleting the entry made
+          // `prev` undefined, so the very record that would have suppressed
+          // the re-emit was the thing being removed — and the pair fell
+          // straight through to emit again. A pair that had just reached
+          // FullDuplex therefore re-drew its punch instruction on the next
+          // pass instead of being left alone.
+          //
+          // Deleting the backoff is still wanted — it is stale bookkeeping
+          // for a tunnel that no longer needs pacing — but the pair has to
+          // leave before reaching the gate, hence the continue.
           this.natHoleBackoff.delete(pairKey);
+          continue;
         }
 
         // === Stagger gate (first round only) ===
@@ -1123,6 +1303,69 @@ export class PacketHandler {
           console.log(
             `[coordinateNatHole] pair ${pairKey} in-progress stale for ` +
             `${Math.round((now - reported.at) / 1000)}s with no terminal report — re-coordinating`
+          );
+        }
+
+        // === In-flight guard ===
+        //
+        // Everything above this line reasons from what the edges have told us.
+        // For a pair being tried for the first time that is nothing at all: no
+        // punch state, so no in-progress hold, so the pair looks due on every
+        // pass. The dispatch above therefore repeated once per inbound
+        // P2PStateInfo until an edge finally answered -- twelve identical
+        // index-0 dispatches on E1<->E2, and 419 of 543 on log5<->E2, against
+        // zero repeats on any pair that connected.
+        //
+        // Reconcile before consulting it. recordPunchResult() already clears
+        // this entry, but relying on that alone makes the guard hostage to
+        // there being exactly one writer of the punch state; anything that
+        // records a verdict without going through it would leave a rung pinned
+        // until the timeout.
+        //
+        // A verdict clears the entry either because it is terminal -- state 2
+        // (Failed) or 3 (Succeeded) means a round finished, so there is nothing
+        // left to wait for -- or because it is newer than our dispatch, in
+        // which case it answers that dispatch by definition. The terminal test
+        // is not redundant with the timestamp: a state written without an `at`
+        // cannot be ordered against the dispatch at all, and holding on it
+        // would wedge the pair until the timeout expires.
+        const flightEntry = this.natHoleInFlight.get(pairKey);
+        if (
+          flightEntry &&
+          reported &&
+          (reported.state === 2 ||
+            reported.state === 3 ||
+            (reported.at || 0) >= (flightEntry.at || 0))
+        ) {
+          this.natHoleInFlight.delete(pairKey);
+        }
+        const inFlightHold = shouldHoldForInFlight(
+          this.natHoleInFlight.get(pairKey),
+          { rung: behaviorIndex, signature },
+          now
+        );
+        // The guard asks the relay's own memory instead of the edge's. It
+        // releases on a rung or signature change (so a ladder advance still
+        // goes out at once), on any verdict (see the reconcile above), and on
+        // NAT_HOLE_INFLIGHT_TIMEOUT_MS (so a dispatch that is genuinely lost is
+        // retried).
+        if (inFlightHold.hold) {
+          // Same reasoning as the in-progress hold above: nothing else will
+          // re-run this decision, so the wake has to be armed here or the pair
+          // goes quiet until some other event disturbs the community.
+          if (this.relayRoom && typeof this.relayRoom.armStaggerWake === "function") {
+            this.relayRoom
+              .armStaggerWake(inFlightHold.wakeAt)
+              .catch((e) =>
+                console.error("[coordinateNatHole] in-flight wake arm failed:", e)
+              );
+          }
+          continue;
+        }
+        if (inFlightHold.reason === "no-verdict") {
+          console.log(
+            `[coordinateNatHole] pair ${pairKey} rung ${behaviorIndex} got no verdict in ` +
+            `${Math.round(NAT_HOLE_INFLIGHT_TIMEOUT_MS / 1000)}s — re-dispatching`
           );
         }
 
@@ -1237,6 +1480,15 @@ export class PacketHandler {
 
         instructions.set(result.senderMAC, result.senderInstruction);
         instructions.set(result.receiverMAC, result.receiverInstruction);
+        // Record the rung as in flight BEFORE returning, so any coordinateNatHole()
+        // pass that runs before the edge's InProgress lands can see that this
+        // pair has already been served. See NAT_HOLE_INFLIGHT_TIMEOUT_MS for
+        // why the edge-reported state cannot cover that window on its own.
+        this.natHoleInFlight.set(pairKey, {
+          rung: behaviorIndex,
+          signature,
+          at: now,
+        });
         paired.add(result.senderMAC);
         paired.add(result.receiverMAC);
         console.log(`[coordinateNatHole] pair ${pairKey} scheduled (roles ${signature}), backoff=${backoffMs}ms`);
@@ -1759,7 +2011,7 @@ export class PacketHandler {
         // relay is blind: it can neither confirm success nor prioritise a
         // retry, and just keeps pushing instructions forever.
         if (t && t.punchResult && t.punchResultPeerMac) {
-          this.recordPunchResult(connInfo.macAddr, t.punchResultPeerMac, t.punchResult);
+          this.recordPunchResult(connInfo.macAddr, t.punchResultPeerMac, t.punchResult, commState);
         }
         if (t && t.observedRaddr && t.macAddr) {
           commState.updatePeer(t.macAddr, { observedRaddr: t.observedRaddr });

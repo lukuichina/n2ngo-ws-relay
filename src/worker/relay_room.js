@@ -8,9 +8,16 @@
  * - 心跳管理
  */
 
-import { PacketHandler } from "../core/handler.js";
+import { PacketHandler, statusOfPeer } from "../core/handler.js";
 import { CommunityManager } from "../core/context.js";
 import { logger, setPendingStorage } from "../core/logger.js";
+
+
+// p2pStatusOf - module level helper for P2P status lookup
+function p2pStatusOf(p2pInfos, reporterMac, peerMac) {
+  if (!p2pInfos) return undefined;
+  return statusOfPeer(p2pInfos, reporterMac, peerMac);
+}
 
 export class RelayRoom {
   constructor(state, env) {
@@ -214,6 +221,10 @@ export class RelayRoom {
       return this.handleRoomEndpoint(request, searchParams);
     }
 
+    if (pathname === "/room-data") {
+      return this.handleRoomDataEndpoint(request, searchParams);
+    }
+
     if (pathname === "/log" || pathname === "/log/clear") {
       return this.handleLogEndpoint(request, searchParams);
     }
@@ -299,6 +310,9 @@ export class RelayRoom {
           const community = connInfo ? connInfo.community : "default";
           import("../core/packet.js").then(({ packProtoVDatagram }) =>
             import("../core/constants.js").then(({ VERSION, PacketType, hashCommunity, parseMAC }) => {
+
+
+
               const header = {
                 version: VERSION,
                 ttl: 64,
@@ -420,7 +434,7 @@ export class RelayRoom {
 
     // 验证 token 和 gateway IP 前缀
     const commState = await this.communityManager.getCommunity(token);
-    if (!commState) {
+        if (!commState) {
       return new Response(this.getLoginHTML("Community not found"), { status: 404 });
     }
 
@@ -428,11 +442,141 @@ export class RelayRoom {
     // 简化版：直接返回设备列表
 
     const peers = commState.getAllPeers();
-    const onlinePeers = peers.filter(p => p.online);
-    const offlinePeers = peers.filter(p => !p.online);
+    const onlinePeers = peers.filter(p => p.online).sort((a, b) => (a.virtualIP || 0) - (b.virtualIP || 0));
+    const offlinePeers = peers.filter(p => !p.online).sort((a, b) => (a.virtualIP || 0) - (b.virtualIP || 0));
 
-    return new Response(this.getRoomHTML(token, onlinePeers, offlinePeers), {
+    return new Response(this.getRoomHTML(token, commState, onlinePeers, offlinePeers), {
       headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+
+  async handleRoomDataEndpoint(request, searchParams) {
+    const token = searchParams.get("token");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "missing token" }), { status: 400 });
+    }
+
+    const commState = await this.communityManager.getCommunity(token);
+    if (!commState) {
+      return new Response(JSON.stringify({ error: "community not found" }), { status: 404 });
+    }
+
+    const peers = commState.getAllPeers();
+    const onlinePeers = peers.filter(p => p.online).sort((a, b) => (a.virtualIP || 0) - (b.virtualIP || 0));
+    const offlinePeers = peers.filter(p => !p.online).sort((a, b) => (a.virtualIP || 0) - (b.virtualIP || 0));
+    const allPeers = peers;
+
+    const formatIp = (num) => `${(num >>> 24) & 255}.${(num >>> 16) & 255}.${(num >>> 8) & 255}.${num & 255}`;
+
+    const punchResultForPair = (fromMac, toMac) => {
+      if (!commState || !commState.p2pInfos) return null;
+      const info = commState.p2pInfos.get(fromMac);
+      if (!info || !Array.isArray(info.to)) return null;
+      const entry = info.to.find(x => x && x.macAddr && x.macAddr.toLowerCase() === toMac.toLowerCase());
+      if (!entry) return null;
+      return { 
+        punchResult: entry.punchResult || null, 
+        p2pStatus: entry.p2pStatus || null,
+        pingLatencyMs: entry.pingLatencyMs || null,
+        degradeHistory: entry.degradeHistory || null,
+        observedRaddr: entry.observedRaddr || null,
+      };
+    };
+
+    const peerKeyMetrics = (peer, allPeers) => {
+      const rows = allPeers.filter(p => p.macAddr.toLowerCase() !== peer.macAddr.toLowerCase());
+      const cells = rows.map(other => {
+        const punch = punchResultForPair(peer.macAddr, other.macAddr);
+        let status = '-';
+        if (punch && punch.punchResult) {
+          if (punch.punchResult.state === 3) status = '✅ P2P';
+          else if (punch.punchResult.state === 1) status = '⏳ 打洞中';
+          else if (punch.punchResult.state === 2) status = '❌ 失败';
+        }
+        if (status === '-') {
+          const p2pStatus = p2pStatusOf(commState.p2pInfos, peer.macAddr, other.macAddr);
+          if (typeof p2pStatus === 'number' && p2pStatus > 0) {
+            if (p2pStatus === 3) status = '✅ P2P';
+            else if (p2pStatus === 2) status = '🟡 Relay';
+            else if (p2pStatus === 1) status = '⏳ Pending';
+            else status = `P2PStatus=${p2pStatus}`;
+          }
+        }
+        const punchKey = [peer.macAddr.toLowerCase(), other.macAddr.toLowerCase()].sort().join("|");
+        const recorded = this.packetHandler.natHolePunchState.get(punchKey);
+        let duration = '-';
+        if (recorded && recorded.state === 3 && recorded.durationMs > 0) {
+          duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
+        } else if (punch && punch.punchResult && punch.punchResult.state === 3 && punch.punchResult.punchDurationMs) {
+          duration = `${(punch.punchResult.punchDurationMs / 1000).toFixed(1)}s`;
+        }
+        const ping = (punch && punch.pingLatencyMs && punch.pingLatencyMs > 0) ? `${punch.pingLatencyMs}ms` : '-';
+        const degradeCount = (punch && punch.degradeHistory && punch.degradeHistory.length) || 0;
+        const degradeLabel = degradeCount > 0 
+          ? `<span class="degrade-badge" title="${(punch.degradeHistory || []).join('; ')}">⚠️ ${degradeCount}</span>` 
+          : '-';
+        const hostname = other.desc || (other.os && other.platform ? [other.os, other.platform].filter(Boolean).join(' ') : (other.platform || other.os || '-'));
+        // Determine role from natHolePunchState (persisted after punch completes)
+        let role = '-';
+        if (recorded && recorded.role) {
+          const myMAC = peer.macAddr.toLowerCase();
+          if (recorded.role.sender === myMAC) role = 'Sender';
+          else if (recorded.role.receiver === myMAC) role = 'Receiver';
+          else role = recorded.role.sender + '→' + recorded.role.receiver;
+        }
+        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
+      });
+      const ipToNum = (ip) => {
+        const parts = (ip || '').split('.');
+        if (parts.length !== 4) return 0;
+        return ((+parts[0] << 24) + (+parts[1] << 16) + (+parts[2] << 8) + (+parts[3])) >>> 0;
+      };
+      cells.sort((a, b) => ipToNum(a.vip) - ipToNum(b.vip));
+      return cells;
+    };
+
+    const row = (peer, isOnline, allPeers) => {
+      const cells = peerKeyMetrics(peer, allPeers);
+      return `
+      <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'table-row':'none'">
+        <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
+        <td>${peer.desc || '-'}</td>
+        <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
+        <td>${formatIp(peer.virtualIP)}</td>
+        <td>${peer.pubSocket || '-'}</td>
+        <td>${peer.p2pEndpoint || '-'}</td>
+        <td>${peer.natType || '-'}</td>
+        <td>${isOnline ? '🟢 Online' : '🔴 Offline'}</td>
+        <td>${(peer.p2pCapabilities || []).join(', ') || '-'}</td>
+        <td>${peer.lastSeen ? new Date(peer.lastSeen * 1000).toLocaleString() : '-'}</td>
+      </tr>
+      <tr class="detail-row" style="display:none">
+        <td colspan="10">
+          <table class="sub-table">
+            <thead>
+              <tr><th>MAC</th><th>Hostname</th><th>Virtual IP</th><th>Role</th><th>Status</th><th>Duration</th><th>Degrade</th><th>Ping</th><th>RADDR</th></tr>
+            </thead>
+            <tbody>
+              ${cells.map(c => `<tr><td>${c.mac}</td><td>${c.hostname}</td><td>${c.vip}</td><td>${c.role}</td><td>${c.status}</td><td>${c.duration}</td><td>${c.degrade}</td><td>${c.ping}</td><td>${c.raddr}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </td>
+      </tr>`;
+    };
+
+    const mainRows = onlinePeers.map(p => row(p, true, allPeers)).join('') + offlinePeers.map(p => row(p, false, allPeers)).join('');
+    const now = Math.floor(Date.now() / 1000);
+
+    return new Response(JSON.stringify({
+      token,
+      now,
+      onlineCount: onlinePeers.length,
+      offlineCount: offlinePeers.length,
+      totalCount: onlinePeers.length + offlinePeers.length,
+      mainRows,
+      offlineRows: offlinePeers.map(p => row(p, false, allPeers)).join(''),
+    }, null, 2), {
+      headers: { "Content-Type": "application/json" },
     });
   }
 
@@ -503,12 +647,86 @@ export class RelayRoom {
 </body></html>`;
   }
 
-  getRoomHTML(token, onlinePeers, offlinePeers) {
+  getRoomHTML(token, commState, onlinePeers, offlinePeers) {
     const formatIp = (num) => `${(num >>> 24) & 255}.${(num >>> 16) & 255}.${(num >>> 8) & 255}.${num & 255}`;
 
-    const row = (peer, isOnline) => `
-      <tr class="${isOnline ? '' : 'offline'}">
-        <td>${peer.macAddr}</td>
+    const punchResultForPair = (fromMac, toMac) => {
+      if (!commState || !commState.p2pInfos) return null;
+      const info = commState.p2pInfos.get(fromMac);
+      if (!info || !Array.isArray(info.to)) return null;
+      const entry = info.to.find(x => x && x.macAddr && x.macAddr.toLowerCase() === toMac.toLowerCase());
+      if (!entry) return null;
+      return { 
+        punchResult: entry.punchResult || null, 
+        p2pStatus: entry.p2pStatus || null,
+        pingLatencyMs: entry.pingLatencyMs || null,
+        degradeHistory: entry.degradeHistory || null,
+        observedRaddr: entry.observedRaddr || null,
+      };
+    };
+
+    const peerKeyMetrics = (peer, allPeers) => {
+      const rows = allPeers.filter(p => p.macAddr.toLowerCase() !== peer.macAddr.toLowerCase());
+      const cells = rows.map(other => {
+        const punch = punchResultForPair(peer.macAddr, other.macAddr);
+        let status = '-';
+        if (punch && punch.punchResult) {
+          if (punch.punchResult.state === 3) status = '✅ P2P';
+          else if (punch.punchResult.state === 1) status = '⏳ 打洞中';
+          else if (punch.punchResult.state === 2) status = '❌ 失败';
+        }
+        if (status === '-') {
+          const p2pStatus = p2pStatusOf(commState.p2pInfos, peer.macAddr, other.macAddr);
+          if (typeof p2pStatus === 'number' && p2pStatus > 0) {
+            if (p2pStatus === 3) status = '✅ P2P';
+            else if (p2pStatus === 2) status = '🟡 Relay';
+            else if (p2pStatus === 1) status = '⏳ Pending';
+            else status = `P2PStatus=${p2pStatus}`;
+          }
+        }
+        // Prefer the last recorded punch duration from natHolePunchState so the
+        // table keeps showing the most recent successful round even after the
+        // transient punchResult in p2pInfos.to is cleared by the next publish.
+        const punchKey = [peer.macAddr.toLowerCase(), other.macAddr.toLowerCase()].sort().join("|");
+        const recorded = this.packetHandler.natHolePunchState.get(punchKey);
+        let duration = '-';
+        if (recorded && recorded.state === 3 && recorded.durationMs > 0) {
+          duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
+        } else if (punch && punch.punchResult && punch.punchResult.state === 3 && punch.punchResult.punchDurationMs) {
+          duration = `${(punch.punchResult.punchDurationMs / 1000).toFixed(1)}s`;
+        }
+        const ping = (punch && punch.pingLatencyMs && punch.pingLatencyMs > 0) ? `${punch.pingLatencyMs}ms` : '-';
+        const degradeCount = (punch && punch.degradeHistory && punch.degradeHistory.length) || 0;
+        const degradeLabel = degradeCount > 0 
+          ? `<span class="degrade-badge" title="${(punch.degradeHistory || []).join('; ')}">⚠️ ${degradeCount}</span>` 
+          : '-';
+        const hostname = other.desc || (other.os && other.platform ? [other.os, other.platform].filter(Boolean).join(' ') : (other.platform || other.os || '-'));
+        // Determine role from natHolePunchState (persisted after punch completes)
+        let role = '-';
+        if (recorded && recorded.role) {
+          const myMAC = peer.macAddr.toLowerCase();
+          if (recorded.role.sender === myMAC) role = 'Sender';
+          else if (recorded.role.receiver === myMAC) role = 'Receiver';
+          else role = recorded.role.sender + '→' + recorded.role.receiver;
+        }
+        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
+      });
+      // Sort by virtual IP for stable display.
+      const ipToNum = (ip) => {
+        const parts = (ip || '').split('.');
+        if (parts.length !== 4) return 0;
+        return ((+parts[0] << 24) + (+parts[1] << 16) + (+parts[2] << 8) + (+parts[3])) >>> 0;
+      };
+      cells.sort((a, b) => ipToNum(a.vip) - ipToNum(b.vip));
+      return cells;
+    };
+
+    const row = (peer, isOnline, allPeers) => {
+      const cells = peerKeyMetrics(peer, allPeers);
+      return `
+      <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'table-row':'none'">
+        <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
+        <td>${peer.desc || (peer.os && peer.platform ? [peer.os, peer.platform].filter(Boolean).join(' ') : (peer.platform || peer.os || '-'))}</td>
         <td>${formatIp(peer.virtualIP)}</td>
         <td>${peer.pubSocket || '-'}</td>
         <td>${peer.p2pEndpoint || '-'}</td>
@@ -517,8 +735,34 @@ export class RelayRoom {
         <td>${peer.p2pCapabilities?.join(', ') || '-'}</td>
         <td>${new Date(peer.lastSeen * 1000).toLocaleString()}</td>
       </tr>
+      <tr class="detail-row" style="display:none">
+        <td colspan="10">
+          <table class="sub-table">
+            <thead>
+              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
+            </thead>
+            <tbody>
+              ${cells.map(c => `
+                <tr>
+                  <td>${c.mac}</td>
+                  <td>${c.vip}</td>
+                  <td>${c.hostname || '-'}</td>
+                  <td>${c.role}</td>
+                  <td>${c.raddr}</td>
+                  <td>${c.ping}</td>
+                  <td>${c.status}</td>
+                  <td>${c.duration}</td>
+                  <td>${c.degrade}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </td>
+      </tr>
     `;
+    };
 
+    const allPeers = [...onlinePeers, ...offlinePeers];
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -537,8 +781,16 @@ export class RelayRoom {
     th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eee; }
     th { background: #f8f9fa; font-weight: 600; color: #333; }
     tr.offline { opacity: 0.6; background: #fafafa; }
-    tr:hover { background: #f0f4ff; }
+    tr.online { background: #fff; }
+    tr.peer-main { cursor: pointer; }
+    tr.peer-main:hover { background: #f0f4ff; }
+    tr.detail-row { background: #fafafa; }
+    tr.detail-row td { padding: 1rem; border-bottom: 2px solid #e0e0e0; }
+    .expand-icon { display: inline-block; width: 12px; transition: transform 0.2s; margin-right: 6px; font-size: 10px; }
+    .sub-table { width: 100%; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; }
+    .sub-table th { background: #f0f4ff; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
     .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; background: #e3f2fd; color: #1976d2; }
+    .degrade-badge { cursor: help; background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
   </style>
 </head>
 <body>
@@ -551,14 +803,85 @@ export class RelayRoom {
     </div>
     <table>
       <thead>
-        <tr><th>MAC Address</th><th>Virtual IP</th><th>Public Socket</th><th>P2P Endpoint</th><th>NAT Type</th><th>Status</th><th>Capabilities</th><th>Last Seen</th></tr>
+        <tr><th>MAC Address</th><th>Hostname</th><th>OS</th><th>Virtual IP</th><th>Public Socket</th><th>P2P Endpoint</th><th>NAT Type</th><th>Status</th><th>Capabilities</th><th>Last Seen</th></tr>
       </thead>
       <tbody>
-        ${onlinePeers.map(p => row(p, true)).join('')}
-        ${offlinePeers.map(p => row(p, false)).join('')}
+        ${onlinePeers.map(p => row(p, true, allPeers)).join('')}
+        ${offlinePeers.map(p => row(p, false, allPeers)).join('')}
       </tbody>
     </table>
   </div>
+  <script>
+    const token = '${token}';
+    const STORAGE_KEY = 'n2n-room-expanded-' + token;
+
+    function saveExpandedState() {
+      const expanded = new Set();
+      document.querySelectorAll('.detail-row[style*="display: table-row"]').forEach(row => {
+        const prevRow = row.previousElementSibling;
+        if (prevRow && prevRow.classList.contains('peer-main')) {
+          const macCell = prevRow.querySelector('td:first-child');
+          if (macCell) {
+            const mac = macCell.textContent.trim().replace(/^▶\s*/, '').trim();
+            expanded.add(mac);
+          }
+        }
+      });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...expanded])); } catch (e) {}
+    }
+
+    function restoreExpandedState() {
+      let expanded = new Set();
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) expanded = new Set(JSON.parse(saved));
+      } catch (e) {}
+      expanded.forEach(mac => {
+        const peerRows = document.querySelectorAll('.peer-main');
+        peerRows.forEach(row => {
+          const macCell = row.querySelector('td:first-child');
+          if (macCell && macCell.textContent.includes(mac)) {
+            const detailRow = row.nextElementSibling;
+            if (detailRow && detailRow.classList.contains('detail-row')) {
+              detailRow.style.display = 'table-row';
+              const icon = row.querySelector('.expand-icon');
+              if (icon) icon.textContent = '▼';
+            }
+          }
+        });
+      });
+    }
+
+    // Restore on initial page load
+    document.addEventListener('DOMContentLoaded', restoreExpandedState);
+
+    // Save on click
+    document.addEventListener('click', e => {
+      if (e.target.closest('.peer-main')) {
+        setTimeout(saveExpandedState, 0);
+      }
+    });
+
+    function refreshTables() {
+      // Save before refresh
+      saveExpandedState();
+
+      fetch('/room-data?token=' + encodeURIComponent(token))
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.mainRows) {
+            const tbody = document.querySelector('table > tbody');
+            if (tbody) {
+              tbody.innerHTML = data.mainRows;
+              // Restore after refresh
+              restoreExpandedState();
+            }
+          }
+        })
+        .catch(err => console.error('table refresh failed', err));
+    }
+    setInterval(refreshTables, 5000);
+  </script>
 </body></html>`;
   }
 

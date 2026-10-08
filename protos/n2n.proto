@@ -90,6 +90,22 @@ message PeerInfo {
   // Both failure modes were seen in the field: a 300s instruction loop
   // against an up pair, and vice versa.
   uint32 p2p_status = 15;
+  // Operating system name (e.g. "linux", "windows", "darwin").
+  string os = 16;
+  // Platform description (e.g. "ubuntu", "centos", "windows 10").
+  string platform = 17;
+  // CPU architecture (e.g. "amd64", "arm64", "x86_64").
+  string arch = 18;
+  // Last measured ping latency to this peer in milliseconds.
+  uint32 ping_latency_ms = 19;
+  // Degradation history entries (human-readable, oldest first).
+  repeated string degrade_history = 20;
+  // Hostname of this edge (for display in relay UI).
+  string hostname = 21;
+  // Client version string (git tag or build version).
+  string client_version = 22;
+  // Client binary MD5 hash (for integrity verification).
+  string client_md5 = 23;
 }
 
 // NatHolePunchState: outcome of a hole-punch attempt, as reported by an edge
@@ -124,6 +140,9 @@ message NatHolePunchResult {
   // own last dispatch, which is wrong whenever an instruction was replaced
   // between being sent and the outcome coming back.
   uint32 behavior_index = 4;
+  // Elapsed time from instruction receipt to first verified data frame
+  // (milliseconds). 0 means "not measured".
+  uint32 punch_duration_ms = 5;
 }
 
 // 对应 Go 中的 PeerInfoList (p2p.proto)

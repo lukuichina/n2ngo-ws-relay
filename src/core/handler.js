@@ -75,7 +75,7 @@ const P2P_FULLDUPLEX = 3;
 // a moment to reach full duplex on both sides, and demotion reports can
 // arrive out of order; without this the relay can retire a success it
 // recorded moments earlier.
-const SUCCESS_GRACE_MS = 30000;
+const SUCCESS_GRACE_MS = 3600000; // 1 hour
 
 // How long an InProgress report stays authoritative before the relay stops
 // waiting on the round it describes.
@@ -901,6 +901,23 @@ export class PacketHandler {
     // per-pair, not per-(pair,rung), so overwriting it with null would erase
     // the record of the strategy that actually ran.
     const prev = this.natHolePunchState.get(key);
+    // Extract role from in-flight before deleting
+    const flight = this.natHoleInFlight.get(key);
+    let role = null;
+    if (flight) {
+      if (flight.senderMAC && flight.receiverMAC) {
+        role = { sender: flight.senderMAC.toLowerCase(), receiver: flight.receiverMAC.toLowerCase() };
+      } else if (flight.signature) {
+        const sig = flight.signature;
+        const arrow = sig.indexOf('->');
+        const at = sig.indexOf('@');
+        if (arrow > 0 && at > arrow) {
+          const sender = sig.substring(0, arrow).toLowerCase();
+          const receiver = sig.substring(arrow + 2, at).toLowerCase();
+          role = { sender, receiver };
+        }
+      }
+    }
     // Any verdict clears the in-flight rung: whatever we sent has now been
     // answered, so the pair is eligible for the next decision. This is the only
     // thing that releases the guard on the happy path -- a rung held by
@@ -915,6 +932,8 @@ export class PacketHandler {
       // The rung this outcome belongs to, so the analyzer's credit lands on
       // the strategy that actually ran. Null when neither side knew.
       behaviorIndex: rung != null ? rung : prev ? prev.behaviorIndex : null,
+      durationMs: result.punchDurationMs || 0,
+      role: role,
     });
     if (state === 3) {
       // Tunnel is up: drop every piece of per-pair retry state so a later
@@ -1488,6 +1507,8 @@ export class PacketHandler {
           rung: behaviorIndex,
           signature,
           at: now,
+          senderMAC: result.senderMAC,
+          receiverMAC: result.receiverMAC,
         });
         paired.add(result.senderMAC);
         paired.add(result.receiverMAC);
@@ -1506,6 +1527,12 @@ export class PacketHandler {
    */
   async handleMessage(ws, data) {
     const buf = data instanceof Uint8Array ? data : new Uint8Array(data);
+    // Always log packet type and source MAC for P2PStateInfo diagnosis
+    if (buf.length >= HEADER_SIZE) {
+      const header = parseProtoVHeader(buf);
+      const srcMAC = formatMAC(header.srcMAC);
+      console.log(`[PacketHandler] RX type=${header.packetType} srcMAC=${srcMAC} len=${buf.length}`);
+    }
     // Per-message tracing is off by default. It cost 165k lines over 11
     // minutes of a two-node test — 7.5 messages/s, two lines each, plus a
     // 16-byte hex dump — and 68% of the resulting log volume was wrangler's
@@ -1729,12 +1756,14 @@ export class PacketHandler {
       // to the other side untouched.
       assistedSockets: req.assistedSockets || [],
       encryptedMachineID: machineID,
+      desc: req.edgeDesc || "",
     });
 
     console.log(
       `[PacketHandler] ${req.edgeMACAddr} NAT feature: natType=${req.natType} ` +
       `pubSocket=${req.pubSocket || "<none>"} ` +
-      `assistedSockets=${JSON.stringify(req.assistedSockets || [])}`
+      `assistedSockets=${JSON.stringify(req.assistedSockets || [])} ` +
+      `edgeDesc="${req.edgeDesc || "<empty>"}"`
     );
 
     // 关联 WS 与社区
@@ -1981,12 +2010,16 @@ export class PacketHandler {
     }
 
     commState.setP2PInfosFor(connInfo.macAddr, p2pInfos);
+    // DEBUG: log key P2PStateInfo fields for display diagnosis
+    const from = p2pInfos.from || {};
+    console.log(`[PacketHandler] P2PStateInfo stored for ${connInfo.macAddr}: os=${from.os || '-'} platform=${from.platform || '-'} arch=${from.arch || '-'} ping=${from.pingLatencyMs ?? '-'} degrade=${from.degradeHistory?.length ?? 0}`);
+    console.log(`[DEBUG] p2pInfos.to for ${connInfo.macAddr}:`, JSON.stringify(p2pInfos.to));
     // Update the peer's pubSocket from the P2PStateInfo if present.
     // This is necessary because encodeRegisterRequest may not include
     // the pubSocket (it's computed after STUN discovery which happens
     // at runtime, not registration time).
-    if (p2pInfos.from && p2pInfos.from.pubSocket) {
-      commState.updatePeer(connInfo.macAddr, { pubSocket: p2pInfos.from.pubSocket });
+    if (from.pubSocket) {
+      commState.updatePeer(connInfo.macAddr, { pubSocket: from.pubSocket });
     }
     // Refresh p2pEndpoint alongside pubSocket. It used to be written only at
     // registration time, so an edge that reconnected WITHOUT re-registering
@@ -2003,6 +2036,21 @@ export class PacketHandler {
     if (p2pInfos.from && p2pInfos.from.observedRaddr) {
       commState.updatePeer(connInfo.macAddr, { observedRaddr: p2pInfos.from.observedRaddr });
     }
+    // Update peer metadata from the latest PeerP2PInfos report.
+    if (p2pInfos.from) {
+      console.log(`[DEBUG] p2pInfos.from for ${connInfo.macAddr}:`, JSON.stringify(p2pInfos.from));
+      const meta = {};
+      if (p2pInfos.from.desc) meta.desc = p2pInfos.from.desc;
+      if (p2pInfos.from.os) meta.os = p2pInfos.from.os;
+      if (p2pInfos.from.platform) meta.platform = p2pInfos.from.platform;
+      if (p2pInfos.from.arch) meta.arch = p2pInfos.from.arch;
+      if (p2pInfos.from.pingLatencyMs) meta.pingLatencyMs = p2pInfos.from.pingLatencyMs;
+      if (p2pInfos.from.degradeHistory && p2pInfos.from.degradeHistory.length) meta.degradeHistory = p2pInfos.from.degradeHistory;
+      if (Object.keys(meta).length) {
+        console.log(`[DEBUG] Updating meta for ${connInfo.macAddr}:`, JSON.stringify(meta));
+        commState.updatePeer(connInfo.macAddr, meta);
+      }
+    }
     if (Array.isArray(p2pInfos.to)) {
       for (const t of p2pInfos.to) {
         // Hole-punch outcome reported by this edge about a peer. Store it so
@@ -2011,7 +2059,23 @@ export class PacketHandler {
         // relay is blind: it can neither confirm success nor prioritise a
         // retry, and just keeps pushing instructions forever.
         if (t && t.punchResult && t.punchResultPeerMac) {
-          this.recordPunchResult(connInfo.macAddr, t.punchResultPeerMac, t.punchResult, commState);
+          // Try to extract role from in-flight context if not already in result
+          const pairKey2 = [connInfo.macAddr.toLowerCase(), t.punchResultPeerMac.toLowerCase()].sort().join("|");
+          let res = t.punchResult;
+          if (!res.role) {
+            const flight = this.natHoleInFlight.get(pairKey2);
+            if (flight && flight.signature) {
+              const sig = flight.signature;
+              const arrow = sig.indexOf('->');
+              const at = sig.indexOf('@');
+              if (arrow > 0 && at > arrow) {
+                const sender = sig.substring(0, arrow).toLowerCase();
+                const receiver = sig.substring(arrow + 2, at).toLowerCase();
+                res = { ...res, role: { sender, receiver } };
+              }
+            }
+          }
+          this.recordPunchResult(connInfo.macAddr, t.punchResultPeerMac, res, commState);
         }
         if (t && t.observedRaddr && t.macAddr) {
           commState.updatePeer(t.macAddr, { observedRaddr: t.observedRaddr });

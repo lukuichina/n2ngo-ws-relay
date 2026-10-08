@@ -68,6 +68,13 @@ export default {
       return roomStub.fetch(request);
     }
 
+    // 设备列表数据端点 (JSON for auto-refresh)
+    if (pathname === "/room-data") {
+      const community = searchParams.get("community") || searchParams.get("token") || "default";
+      const roomStub = env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(community), options);
+      return roomStub.fetch(request);
+    }
+
     // 日志查看端点
     if (pathname === "/log" || pathname === "/log/clear") {
       if (!env.LOG_PASSWORD || env.LOG_PASSWORD.trim() === "") {

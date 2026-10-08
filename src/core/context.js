@@ -134,7 +134,7 @@ export class CommunityState {
    * @returns {Object} { virtualIP, isNew, peerInfo }
    */
   async registerPeer(params) {
-    const { macAddr, ws, p2pEndpoint, p2pCapabilities, pubSocket, natType, encryptedMachineID, assistedSockets } = params;
+    const { macAddr, ws, p2pEndpoint, p2pCapabilities, pubSocket, natType, encryptedMachineID, assistedSockets, desc } = params;
     const normalizedMAC = macAddr.toLowerCase();
 
     // 分配虚拟 IP
@@ -162,6 +162,7 @@ export class CommunityState {
       lastSeen: now,
       registeredAt: now,
       encryptedMachineID: encryptedMachineID ? Array.from(encryptedMachineID) : [],
+      desc: desc || "",
     };
 
     this.peers.set(normalizedMAC, peerInfo);

@@ -1409,6 +1409,14 @@ export const n2n = $root.n2n = (() => {
          * @property {string|null} [punchResultPeerMac] PeerInfo punchResultPeerMac
          * @property {Array.<string>|null} [assistedSockets] PeerInfo assistedSockets
          * @property {number|null} [p2pStatus] PeerInfo p2pStatus
+         * @property {string|null} [os] PeerInfo os
+         * @property {string|null} [platform] PeerInfo platform
+         * @property {string|null} [arch] PeerInfo arch
+         * @property {number|null} [pingLatencyMs] PeerInfo pingLatencyMs
+         * @property {Array.<string>|null} [degradeHistory] PeerInfo degradeHistory
+         * @property {string|null} [hostname] PeerInfo hostname
+         * @property {string|null} [clientVersion] PeerInfo clientVersion
+         * @property {string|null} [clientMd5] PeerInfo clientMd5
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -1436,6 +1444,7 @@ export const n2n = $root.n2n = (() => {
         const PeerInfo = function (properties) {
             this.p2pCapabilities = [];
             this.assistedSockets = [];
+            this.degradeHistory = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -1563,6 +1572,70 @@ export const n2n = $root.n2n = (() => {
         PeerInfo.prototype.p2pStatus = 0;
 
         /**
+         * PeerInfo os.
+         * @member {string} os
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.os = "";
+
+        /**
+         * PeerInfo platform.
+         * @member {string} platform
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.platform = "";
+
+        /**
+         * PeerInfo arch.
+         * @member {string} arch
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.arch = "";
+
+        /**
+         * PeerInfo pingLatencyMs.
+         * @member {number} pingLatencyMs
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.pingLatencyMs = 0;
+
+        /**
+         * PeerInfo degradeHistory.
+         * @member {Array.<string>} degradeHistory
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.degradeHistory = $util.emptyArray;
+
+        /**
+         * PeerInfo hostname.
+         * @member {string} hostname
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.hostname = "";
+
+        /**
+         * PeerInfo clientVersion.
+         * @member {string} clientVersion
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.clientVersion = "";
+
+        /**
+         * PeerInfo clientMd5.
+         * @member {string} clientMd5
+         * @memberof n2n.PeerInfo
+         * @instance
+         */
+        PeerInfo.prototype.clientMd5 = "";
+
+        /**
          * Creates a new PeerInfo instance using the specified properties.
          * @function create
          * @memberof n2n.PeerInfo
@@ -1626,6 +1699,23 @@ export const n2n = $root.n2n = (() => {
                     writer.uint32(/* id 14, wireType 2 =*/114).string(message.assistedSockets[i]);
             if (message.p2pStatus != null && $Object.hasOwnProperty.call(message, "p2pStatus") && message.p2pStatus !== 0)
                 writer.uint32(/* id 15, wireType 0 =*/120).uint32(message.p2pStatus);
+            if (message.os != null && $Object.hasOwnProperty.call(message, "os") && message.os !== "")
+                writer.uint32(/* id 16, wireType 2 =*/130).string(message.os);
+            if (message.platform != null && $Object.hasOwnProperty.call(message, "platform") && message.platform !== "")
+                writer.uint32(/* id 17, wireType 2 =*/138).string(message.platform);
+            if (message.arch != null && $Object.hasOwnProperty.call(message, "arch") && message.arch !== "")
+                writer.uint32(/* id 18, wireType 2 =*/146).string(message.arch);
+            if (message.pingLatencyMs != null && $Object.hasOwnProperty.call(message, "pingLatencyMs") && message.pingLatencyMs !== 0)
+                writer.uint32(/* id 19, wireType 0 =*/152).uint32(message.pingLatencyMs);
+            if (message.degradeHistory != null && message.degradeHistory.length)
+                for (let i = 0; i < message.degradeHistory.length; ++i)
+                    writer.uint32(/* id 20, wireType 2 =*/162).string(message.degradeHistory[i]);
+            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname") && message.hostname !== "")
+                writer.uint32(/* id 21, wireType 2 =*/170).string(message.hostname);
+            if (message.clientVersion != null && $Object.hasOwnProperty.call(message, "clientVersion") && message.clientVersion !== "")
+                writer.uint32(/* id 22, wireType 2 =*/178).string(message.clientVersion);
+            if (message.clientMd5 != null && $Object.hasOwnProperty.call(message, "clientMd5") && message.clientMd5 !== "")
+                writer.uint32(/* id 23, wireType 2 =*/186).string(message.clientMd5);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -1810,6 +1900,77 @@ export const n2n = $root.n2n = (() => {
                             delete message.p2pStatus;
                         continue;
                     }
+                case 16: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.os = value;
+                        else
+                            delete message.os;
+                        continue;
+                    }
+                case 17: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.platform = value;
+                        else
+                            delete message.platform;
+                        continue;
+                    }
+                case 18: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.arch = value;
+                        else
+                            delete message.arch;
+                        continue;
+                    }
+                case 19: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.pingLatencyMs = value;
+                        else
+                            delete message.pingLatencyMs;
+                        continue;
+                    }
+                case 20: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.degradeHistory && message.degradeHistory.length))
+                            message.degradeHistory = [];
+                        message.degradeHistory.push(reader.stringVerify());
+                        continue;
+                    }
+                case 21: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.hostname = value;
+                        else
+                            delete message.hostname;
+                        continue;
+                    }
+                case 22: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.clientVersion = value;
+                        else
+                            delete message.clientVersion;
+                        continue;
+                    }
+                case 23: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.clientMd5 = value;
+                        else
+                            delete message.clientMd5;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -1915,6 +2076,34 @@ export const n2n = $root.n2n = (() => {
             if (message.p2pStatus != null && $Object.hasOwnProperty.call(message, "p2pStatus"))
                 if (!$util.isInteger(message.p2pStatus))
                     return "p2pStatus: integer expected";
+            if (message.os != null && $Object.hasOwnProperty.call(message, "os"))
+                if (!$util.isString(message.os))
+                    return "os: string expected";
+            if (message.platform != null && $Object.hasOwnProperty.call(message, "platform"))
+                if (!$util.isString(message.platform))
+                    return "platform: string expected";
+            if (message.arch != null && $Object.hasOwnProperty.call(message, "arch"))
+                if (!$util.isString(message.arch))
+                    return "arch: string expected";
+            if (message.pingLatencyMs != null && $Object.hasOwnProperty.call(message, "pingLatencyMs"))
+                if (!$util.isInteger(message.pingLatencyMs))
+                    return "pingLatencyMs: integer expected";
+            if (message.degradeHistory != null && $Object.hasOwnProperty.call(message, "degradeHistory")) {
+                if (!$Array.isArray(message.degradeHistory))
+                    return "degradeHistory: array expected";
+                for (let i = 0; i < message.degradeHistory.length; ++i)
+                    if (!$util.isString(message.degradeHistory[i]))
+                        return "degradeHistory: string[] expected";
+            }
+            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname"))
+                if (!$util.isString(message.hostname))
+                    return "hostname: string expected";
+            if (message.clientVersion != null && $Object.hasOwnProperty.call(message, "clientVersion"))
+                if (!$util.isString(message.clientVersion))
+                    return "clientVersion: string expected";
+            if (message.clientMd5 != null && $Object.hasOwnProperty.call(message, "clientMd5"))
+                if (!$util.isString(message.clientMd5))
+                    return "clientMd5: string expected";
             return null;
         };
 
@@ -2003,6 +2192,34 @@ export const n2n = $root.n2n = (() => {
             if (object.p2pStatus != null)
                 if ($Number(object.p2pStatus) !== 0)
                     message.p2pStatus = object.p2pStatus >>> 0;
+            if (object.os != null)
+                if (typeof object.os !== "string" || object.os.length)
+                    message.os = $String(object.os);
+            if (object.platform != null)
+                if (typeof object.platform !== "string" || object.platform.length)
+                    message.platform = $String(object.platform);
+            if (object.arch != null)
+                if (typeof object.arch !== "string" || object.arch.length)
+                    message.arch = $String(object.arch);
+            if (object.pingLatencyMs != null)
+                if ($Number(object.pingLatencyMs) !== 0)
+                    message.pingLatencyMs = object.pingLatencyMs >>> 0;
+            if (object.degradeHistory) {
+                if (!$Array.isArray(object.degradeHistory))
+                    throw $TypeError(".n2n.PeerInfo.degradeHistory: array expected");
+                message.degradeHistory = $Array(object.degradeHistory.length);
+                for (let i = 0; i < object.degradeHistory.length; ++i)
+                    message.degradeHistory[i] = $String(object.degradeHistory[i]);
+            }
+            if (object.hostname != null)
+                if (typeof object.hostname !== "string" || object.hostname.length)
+                    message.hostname = $String(object.hostname);
+            if (object.clientVersion != null)
+                if (typeof object.clientVersion !== "string" || object.clientVersion.length)
+                    message.clientVersion = $String(object.clientVersion);
+            if (object.clientMd5 != null)
+                if (typeof object.clientMd5 !== "string" || object.clientMd5.length)
+                    message.clientMd5 = $String(object.clientMd5);
             return message;
         };
 
@@ -2026,6 +2243,7 @@ export const n2n = $root.n2n = (() => {
             if (options.arrays || options.defaults) {
                 object.p2pCapabilities = [];
                 object.assistedSockets = [];
+                object.degradeHistory = [];
             }
             if (options.defaults) {
                 object.virtualIp = "";
@@ -2051,6 +2269,13 @@ export const n2n = $root.n2n = (() => {
                 object.punchResult = null;
                 object.punchResultPeerMac = "";
                 object.p2pStatus = 0;
+                object.os = "";
+                object.platform = "";
+                object.arch = "";
+                object.pingLatencyMs = 0;
+                object.hostname = "";
+                object.clientVersion = "";
+                object.clientMd5 = "";
             }
             if (message.virtualIp != null && $Object.hasOwnProperty.call(message, "virtualIp"))
                 object.virtualIp = message.virtualIp;
@@ -2093,6 +2318,25 @@ export const n2n = $root.n2n = (() => {
             }
             if (message.p2pStatus != null && $Object.hasOwnProperty.call(message, "p2pStatus"))
                 object.p2pStatus = message.p2pStatus;
+            if (message.os != null && $Object.hasOwnProperty.call(message, "os"))
+                object.os = message.os;
+            if (message.platform != null && $Object.hasOwnProperty.call(message, "platform"))
+                object.platform = message.platform;
+            if (message.arch != null && $Object.hasOwnProperty.call(message, "arch"))
+                object.arch = message.arch;
+            if (message.pingLatencyMs != null && $Object.hasOwnProperty.call(message, "pingLatencyMs"))
+                object.pingLatencyMs = message.pingLatencyMs;
+            if (message.degradeHistory && message.degradeHistory.length) {
+                object.degradeHistory = $Array(message.degradeHistory.length);
+                for (let j = 0; j < message.degradeHistory.length; ++j)
+                    object.degradeHistory[j] = message.degradeHistory[j];
+            }
+            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname"))
+                object.hostname = message.hostname;
+            if (message.clientVersion != null && $Object.hasOwnProperty.call(message, "clientVersion"))
+                object.clientVersion = message.clientVersion;
+            if (message.clientMd5 != null && $Object.hasOwnProperty.call(message, "clientMd5"))
+                object.clientMd5 = message.clientMd5;
             return object;
         };
 
@@ -2151,6 +2395,7 @@ export const n2n = $root.n2n = (() => {
          * @property {number|null} [attempts] NatHolePunchResult attempts
          * @property {string|null} [detail] NatHolePunchResult detail
          * @property {number|null} [behaviorIndex] NatHolePunchResult behaviorIndex
+         * @property {number|null} [punchDurationMs] NatHolePunchResult punchDurationMs
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -2215,6 +2460,14 @@ export const n2n = $root.n2n = (() => {
         NatHolePunchResult.prototype.behaviorIndex = 0;
 
         /**
+         * NatHolePunchResult punchDurationMs.
+         * @member {number} punchDurationMs
+         * @memberof n2n.NatHolePunchResult
+         * @instance
+         */
+        NatHolePunchResult.prototype.punchDurationMs = 0;
+
+        /**
          * Creates a new NatHolePunchResult instance using the specified properties.
          * @function create
          * @memberof n2n.NatHolePunchResult
@@ -2254,6 +2507,8 @@ export const n2n = $root.n2n = (() => {
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.detail);
             if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex") && message.behaviorIndex !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.behaviorIndex);
+            if (message.punchDurationMs != null && $Object.hasOwnProperty.call(message, "punchDurationMs") && message.punchDurationMs !== 0)
+                writer.uint32(/* id 5, wireType 0 =*/40).uint32(message.punchDurationMs);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -2347,6 +2602,15 @@ export const n2n = $root.n2n = (() => {
                             delete message.behaviorIndex;
                         continue;
                     }
+                case 5: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.uint32())
+                            message.punchDurationMs = value;
+                        else
+                            delete message.punchDurationMs;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -2407,6 +2671,9 @@ export const n2n = $root.n2n = (() => {
             if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex"))
                 if (!$util.isInteger(message.behaviorIndex))
                     return "behaviorIndex: integer expected";
+            if (message.punchDurationMs != null && $Object.hasOwnProperty.call(message, "punchDurationMs"))
+                if (!$util.isInteger(message.punchDurationMs))
+                    return "punchDurationMs: integer expected";
             return null;
         };
 
@@ -2459,6 +2726,9 @@ export const n2n = $root.n2n = (() => {
             if (object.behaviorIndex != null)
                 if ($Number(object.behaviorIndex) !== 0)
                     message.behaviorIndex = object.behaviorIndex >>> 0;
+            if (object.punchDurationMs != null)
+                if ($Number(object.punchDurationMs) !== 0)
+                    message.punchDurationMs = object.punchDurationMs >>> 0;
             return message;
         };
 
@@ -2484,6 +2754,7 @@ export const n2n = $root.n2n = (() => {
                 object.attempts = 0;
                 object.detail = "";
                 object.behaviorIndex = 0;
+                object.punchDurationMs = 0;
             }
             if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
                 object.state = options.enums === $String ? $root.n2n.NatHolePunchState[message.state] === $undefined ? message.state : $root.n2n.NatHolePunchState[message.state] : message.state;
@@ -2493,6 +2764,8 @@ export const n2n = $root.n2n = (() => {
                 object.detail = message.detail;
             if (message.behaviorIndex != null && $Object.hasOwnProperty.call(message, "behaviorIndex"))
                 object.behaviorIndex = message.behaviorIndex;
+            if (message.punchDurationMs != null && $Object.hasOwnProperty.call(message, "punchDurationMs"))
+                object.punchDurationMs = message.punchDurationMs;
             return object;
         };
 

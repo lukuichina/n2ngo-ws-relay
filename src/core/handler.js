@@ -935,8 +935,8 @@ export class PacketHandler {
       // The rung this outcome belongs to, so the analyzer's credit lands on
       // the strategy that actually ran. Null when neither side knew.
       behaviorIndex: rung != null ? rung : prev ? prev.behaviorIndex : null,
-      durationMs: result.punchDurationMs || 0,
-      role: role,
+      durationMs: (result.punchDurationMs && result.punchDurationMs > 0) ? result.punchDurationMs : (prev && prev.durationMs ? prev.durationMs : 0),
+      role: role || (prev && prev.role) || null,
     });
     if (state === 3) {
       // Tunnel is up: drop every piece of per-pair retry state so a later

@@ -902,13 +902,16 @@ export class PacketHandler {
     // the record of the strategy that actually ran.
     const prev = this.natHolePunchState.get(key);
     // Extract role from in-flight before deleting
-    const flight = this.natHoleInFlight.get(key);
+    let flight = this.natHoleInFlight.get(key);
+    if (!flight) {
+      flight = this.natHoleInFlight.get(pairKeyFor(reporterMAC, peerMAC));
+    }
     let role = null;
     if (flight) {
       if (flight.senderMAC && flight.receiverMAC) {
-        role = { sender: flight.senderMAC.toLowerCase(), receiver: flight.receiverMAC.toLowerCase() };
+        role = { sender: String(flight.senderMAC).toLowerCase(), receiver: String(flight.receiverMAC).toLowerCase() };
       } else if (flight.signature) {
-        const sig = flight.signature;
+        const sig = String(flight.signature);
         const arrow = sig.indexOf('->');
         const at = sig.indexOf('@');
         if (arrow > 0 && at > arrow) {
@@ -2062,10 +2065,12 @@ export class PacketHandler {
           // Try to extract role from in-flight context if not already in result
           const pairKey2 = [connInfo.macAddr.toLowerCase(), t.punchResultPeerMac.toLowerCase()].sort().join("|");
           let res = t.punchResult;
-          if (!res.role) {
-            const flight = this.natHoleInFlight.get(pairKey2);
-            if (flight && flight.signature) {
-              const sig = flight.signature;
+          const flight2 = this.natHoleInFlight.get(pairKey2);
+          if (!res.role && flight2) {
+            if (flight2.senderMAC && flight2.receiverMAC) {
+              res = { ...res, role: { sender: flight2.senderMAC.toLowerCase(), receiver: flight2.receiverMAC.toLowerCase() } };
+            } else if (flight2.signature) {
+              const sig = flight2.signature;
               const arrow = sig.indexOf('->');
               const at = sig.indexOf('@');
               if (arrow > 0 && at > arrow) {

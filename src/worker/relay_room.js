@@ -505,9 +505,9 @@ export class RelayRoom {
         const punchKey = [peer.macAddr.toLowerCase(), other.macAddr.toLowerCase()].sort().join("|");
         const recorded = this.packetHandler.natHolePunchState.get(punchKey);
         let duration = '-';
-        if (recorded && recorded.state === 3 && recorded.durationMs > 0) {
+        if (recorded && recorded.durationMs > 0) {
           duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
-        } else if (punch && punch.punchResult && punch.punchResult.state === 3 && punch.punchResult.punchDurationMs) {
+        } else if (punch && punch.punchResult && punch.punchResult.punchDurationMs > 0) {
           duration = `${(punch.punchResult.punchDurationMs / 1000).toFixed(1)}s`;
         }
         const ping = (punch && punch.pingLatencyMs && punch.pingLatencyMs > 0) ? `${punch.pingLatencyMs}ms` : '-';
@@ -538,7 +538,7 @@ export class RelayRoom {
     const row = (peer, isOnline, allPeers) => {
       const cells = peerKeyMetrics(peer, allPeers);
       return `
-      <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'table-row':'none'">
+      <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="var nr=this.nextElementSibling; var disp=nr.style.display==='none'?'table-row':'none'; nr.style.display=disp; var ic=this.querySelector('.expand-icon'); if(ic){ic.textContent=disp==='table-row'?'▼':'▶';} setTimeout(saveExpandedState,0);">
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
         <td>${peer.desc || '-'}</td>
         <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
@@ -554,10 +554,10 @@ export class RelayRoom {
         <td colspan="10">
           <table class="sub-table">
             <thead>
-              <tr><th>MAC</th><th>Hostname</th><th>Virtual IP</th><th>Role</th><th>Status</th><th>Duration</th><th>Degrade</th><th>Ping</th><th>RADDR</th></tr>
+              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
             </thead>
             <tbody>
-              ${cells.map(c => `<tr><td>${c.mac}</td><td>${c.hostname}</td><td>${c.vip}</td><td>${c.role}</td><td>${c.status}</td><td>${c.duration}</td><td>${c.degrade}</td><td>${c.ping}</td><td>${c.raddr}</td></tr>`).join('')}
+              ${cells.map(c => `<tr><td>${c.mac}</td><td>${c.vip}</td><td>${c.hostname || '-'}</td><td>${c.role}</td><td>${c.raddr}</td><td>${c.ping}</td><td>${c.status}</td><td>${c.duration}</td><td>${c.degrade}</td></tr>`).join('')}
             </tbody>
           </table>
         </td>
@@ -690,9 +690,9 @@ export class RelayRoom {
         const punchKey = [peer.macAddr.toLowerCase(), other.macAddr.toLowerCase()].sort().join("|");
         const recorded = this.packetHandler.natHolePunchState.get(punchKey);
         let duration = '-';
-        if (recorded && recorded.state === 3 && recorded.durationMs > 0) {
+        if (recorded && recorded.durationMs > 0) {
           duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
-        } else if (punch && punch.punchResult && punch.punchResult.state === 3 && punch.punchResult.punchDurationMs) {
+        } else if (punch && punch.punchResult && punch.punchResult.punchDurationMs > 0) {
           duration = `${(punch.punchResult.punchDurationMs / 1000).toFixed(1)}s`;
         }
         const ping = (punch && punch.pingLatencyMs && punch.pingLatencyMs > 0) ? `${punch.pingLatencyMs}ms` : '-';
@@ -724,16 +724,17 @@ export class RelayRoom {
     const row = (peer, isOnline, allPeers) => {
       const cells = peerKeyMetrics(peer, allPeers);
       return `
-      <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'table-row':'none'">
+      <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="var nr=this.nextElementSibling; var disp=nr.style.display==='none'?'table-row':'none'; nr.style.display=disp; var ic=this.querySelector('.expand-icon'); if(ic){ic.textContent=disp==='table-row'?'▼':'▶';} setTimeout(saveExpandedState,0);">
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
-        <td>${peer.desc || (peer.os && peer.platform ? [peer.os, peer.platform].filter(Boolean).join(' ') : (peer.platform || peer.os || '-'))}</td>
+        <td>${peer.desc || '-'}</td>
+        <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
         <td>${formatIp(peer.virtualIP)}</td>
         <td>${peer.pubSocket || '-'}</td>
         <td>${peer.p2pEndpoint || '-'}</td>
         <td>${peer.natType || 'unknown'}</td>
         <td>${isOnline ? '🟢 Online' : '🔴 Offline'}</td>
         <td>${peer.p2pCapabilities?.join(', ') || '-'}</td>
-        <td>${new Date(peer.lastSeen * 1000).toLocaleString()}</td>
+        <td>${peer.lastSeen ? new Date(peer.lastSeen * 1000).toLocaleString() : '-'}</td>
       </tr>
       <tr class="detail-row" style="display:none">
         <td colspan="10">
@@ -784,8 +785,8 @@ export class RelayRoom {
     tr.online { background: #fff; }
     tr.peer-main { cursor: pointer; }
     tr.peer-main:hover { background: #f0f4ff; }
-    tr.detail-row { background: #fafafa; }
-    tr.detail-row td { padding: 1rem; border-bottom: 2px solid #e0e0e0; }
+    tr.detail-row { background: #e8f5e9; }
+    tr.detail-row td { padding: 1rem; border: 1px solid #c8e6c9; background: #f1f8e9; }
     .expand-icon { display: inline-block; width: 12px; transition: transform 0.2s; margin-right: 6px; font-size: 10px; }
     .sub-table { width: 100%; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; }
     .sub-table th { background: #f0f4ff; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -822,7 +823,7 @@ export class RelayRoom {
         if (prevRow && prevRow.classList.contains('peer-main')) {
           const macCell = prevRow.querySelector('td:first-child');
           if (macCell) {
-            const mac = macCell.textContent.trim().replace(/^▶\s*/, '').trim();
+            const mac = macCell.textContent.trim().replace(/^[▼▶\s]*/g, '').trim();
             expanded.add(mac);
           }
         }
@@ -830,38 +831,27 @@ export class RelayRoom {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...expanded])); } catch (e) {}
     }
 
-    function restoreExpandedState() {
+        function restoreExpandedState() {
       let expanded = new Set();
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) expanded = new Set(JSON.parse(saved));
       } catch (e) {}
-      expanded.forEach(mac => {
-        const peerRows = document.querySelectorAll('.peer-main');
-        peerRows.forEach(row => {
-          const macCell = row.querySelector('td:first-child');
-          if (macCell && macCell.textContent.includes(mac)) {
-            const detailRow = row.nextElementSibling;
-            if (detailRow && detailRow.classList.contains('detail-row')) {
-              detailRow.style.display = 'table-row';
-              const icon = row.querySelector('.expand-icon');
-              if (icon) icon.textContent = '▼';
-            }
+      const peerRows = document.querySelectorAll('.peer-main');
+      peerRows.forEach(row => {
+        const macCell = row.querySelector('td:first-child');
+        if (!macCell) return;
+        const cellMac = macCell.textContent.trim().replace(/^[▼▶\s]*/g, '').trim();
+        if (expanded.has(cellMac)) {
+          const detailRow = row.nextElementSibling;
+          if (detailRow && detailRow.classList.contains('detail-row')) {
+            detailRow.style.display = 'table-row';
+            const icon = row.querySelector('.expand-icon');
+            if (icon) icon.textContent = '▼';
           }
-        });
+        }
       });
     }
-
-    // Restore on initial page load
-    document.addEventListener('DOMContentLoaded', restoreExpandedState);
-
-    // Save on click
-    document.addEventListener('click', e => {
-      if (e.target.closest('.peer-main')) {
-        setTimeout(saveExpandedState, 0);
-      }
-    });
-
     function refreshTables() {
       // Save before refresh
       saveExpandedState();

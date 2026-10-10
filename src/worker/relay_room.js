@@ -798,9 +798,9 @@ export class RelayRoom {
   <div class="container">
     <h1>${this.env.GATEWAY_NAME || "n2n-gateway"} - Community: ${token}</h1>
     <div class="stats">
-      <div class="stat-card"><div class="stat-value">${onlinePeers.length}</div><div class="stat-label">Online</div></div>
-      <div class="stat-card"><div class="stat-value">${offlinePeers.length}</div><div class="stat-label">Offline</div></div>
-      <div class="stat-card"><div class="stat-value">${onlinePeers.length + offlinePeers.length}</div><div class="stat-label">Total</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-online">${onlinePeers.length}</div><div class="stat-label">Online</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-offline">${offlinePeers.length}</div><div class="stat-label">Offline</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-total">${onlinePeers.length + offlinePeers.length}</div><div class="stat-label">Total</div></div>
     </div>
     <table>
       <thead>
@@ -859,12 +859,25 @@ export class RelayRoom {
       fetch('/room-data?token=' + encodeURIComponent(token))
         .then(r => r.json())
         .then(data => {
-          if (data && data.mainRows) {
-            const tbody = document.querySelector('table > tbody');
-            if (tbody) {
-              tbody.innerHTML = data.mainRows;
-              // Restore after refresh
-              restoreExpandedState();
+          if (data) {
+            if (data.mainRows) {
+              const tbody = document.querySelector('table > tbody');
+              if (tbody) {
+                tbody.innerHTML = data.mainRows;
+                restoreExpandedState();
+              }
+            }
+            if (typeof data.onlineCount === 'number') {
+              const el = document.getElementById('stat-online');
+              if (el) el.textContent = data.onlineCount;
+            }
+            if (typeof data.offlineCount === 'number') {
+              const el = document.getElementById('stat-offline');
+              if (el) el.textContent = data.offlineCount;
+            }
+            if (typeof data.totalCount === 'number') {
+              const el = document.getElementById('stat-total');
+              if (el) el.textContent = data.totalCount;
             }
           }
         })

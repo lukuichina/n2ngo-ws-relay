@@ -300,6 +300,42 @@ export class CommunityState {
       console.warn(`[Community-${this.community}] setP2PInfosFor: unknown edge ${normalizedMAC}`);
       return false;
     }
+    // Merge, do not replace. The edge's P2PStateInfo is a snapshot of what it
+    // saw at one moment; the relay augments each `to` entry with fields the
+    // edge never sends (role, per-side TTL, punch duration, ladder rung).
+    // A wholesale replace would drop those the next time the edge reports,
+    // which is constantly: the page refreshes every 5s and each refresh
+    // triggers another P2PStateInfo. Observed 2026-10-14: recordPunchResult
+    // correctly wrote behaviorIndex=0 into the entry, the UI read it back
+    // and showed it in the relay log, and then the very next edge report
+    // replaced the whole object and the Ladder column went back to "-".
+    const existing = this.p2pInfos.get(normalizedMAC);
+    if (existing && Array.isArray(existing.to) && Array.isArray(infos.to)) {
+      const byMac = new Map();
+      for (const e of existing.to) {
+        if (e && e.macAddr) byMac.set(String(e.macAddr).toLowerCase(), e);
+      }
+      for (const t of infos.to) {
+        if (!t || !t.macAddr) continue;
+        const k = String(t.macAddr).toLowerCase();
+        const prev = byMac.get(k);
+        if (prev) {
+          // Edge fields win (fresh observation); relay-only fields survive.
+          const preserved = {};
+          for (const f of ["role", "senderTTL", "receiverTTL", "punchDurationMs", "behaviorIndex", "degradeHistory"]) {
+            if (prev[f] != null) preserved[f] = prev[f];
+          }
+          console.log('[DEBUG-SETPI-MERGE] k='+k+' prevBI='+(prev.behaviorIndex!=null?prev.behaviorIndex:'null')+' tBI='+(t.behaviorIndex!=null?t.behaviorIndex:'null')+' preservedBI='+(preserved.behaviorIndex!=null?preserved.behaviorIndex:'null'));
+          // ttl is relay-derived from the per-side values; keep it too so the
+          // UI does not flicker to "-" between a report and the next render.
+          if (prev.ttl != null) preserved.ttl = prev.ttl;
+          byMac.set(k, { ...preserved, ...t });
+        } else {
+          byMac.set(k, t);
+        }
+      }
+      infos = { from: infos.from, to: [...byMac.values()] };
+    }
     this.p2pInfos.set(normalizedMAC, infos);
     return true;
   }

@@ -474,12 +474,20 @@ export class RelayRoom {
       if (!info || !Array.isArray(info.to)) return null;
       const entry = info.to.find(x => x && x.macAddr && x.macAddr.toLowerCase() === toMac.toLowerCase());
       if (!entry) return null;
+      console.log('[DEBUG-ROOMDATA] '+fromMac+'->'+toMac+' bi='+entry.behaviorIndex+' biType='+typeof entry.behaviorIndex+' p2pStatus='+entry.p2pStatus+' punchState='+(entry.punchResult&&entry.punchResult.state));
+
       return { 
         punchResult: entry.punchResult || null, 
         p2pStatus: entry.p2pStatus || null,
         pingLatencyMs: entry.pingLatencyMs || null,
         degradeHistory: entry.degradeHistory || null,
         observedRaddr: entry.observedRaddr || null,
+        role: entry.role || null,
+        ttl: entry.ttl != null ? entry.ttl : null,
+        senderTTL: entry.senderTTL != null ? entry.senderTTL : null,
+        receiverTTL: entry.receiverTTL != null ? entry.receiverTTL : null,
+        punchDurationMs: entry.punchDurationMs || null,
+        behaviorIndex: entry.behaviorIndex != null ? entry.behaviorIndex : null,
       };
     };
 
@@ -487,6 +495,7 @@ export class RelayRoom {
       const rows = allPeers.filter(p => p.macAddr.toLowerCase() !== peer.macAddr.toLowerCase());
       const cells = rows.map(other => {
         const punch = punchResultForPair(peer.macAddr, other.macAddr);
+
         let status = '-';
         if (punch && punch.punchResult) {
           if (punch.punchResult.state === 3) status = '✅ P2P';
@@ -505,10 +514,13 @@ export class RelayRoom {
         const punchKey = [peer.macAddr.toLowerCase(), other.macAddr.toLowerCase()].sort().join("|");
         const recorded = this.packetHandler.natHolePunchState.get(punchKey);
         let duration = '-';
-        if (recorded && recorded.durationMs > 0) {
-          duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
+        // Priority: p2pInfos.punchDurationMs (survives reconnect) > punchResult > natHolePunchState
+        if (punch && punch.punchDurationMs && punch.punchDurationMs > 0) {
+          duration = `${(punch.punchDurationMs / 1000).toFixed(1)}s`;
         } else if (punch && punch.punchResult && punch.punchResult.punchDurationMs > 0) {
           duration = `${(punch.punchResult.punchDurationMs / 1000).toFixed(1)}s`;
+        } else if (recorded && recorded.durationMs > 0) {
+          duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
         }
         const ping = (punch && punch.pingLatencyMs && punch.pingLatencyMs > 0) ? `${punch.pingLatencyMs}ms` : '-';
         const degradeCount = (punch && punch.degradeHistory && punch.degradeHistory.length) || 0;
@@ -516,15 +528,28 @@ export class RelayRoom {
           ? `<span class="degrade-badge" title="${(punch.degradeHistory || []).join('; ')}">⚠️ ${degradeCount}</span>` 
           : '-';
         const hostname = other.desc || (other.os && other.platform ? [other.os, other.platform].filter(Boolean).join(' ') : (other.platform || other.os || '-'));
-        // Determine role from natHolePunchState (persisted after punch completes)
+        // Determine role from p2pInfos (survives reconnect) or natHolePunchState fallback
         let role = '-';
-        if (recorded && recorded.role) {
+        const roleObj = (punch && punch.role) || (recorded && recorded.role);
+        if (roleObj) {
           const myMAC = peer.macAddr.toLowerCase();
-          if (recorded.role.sender === myMAC) role = 'Sender';
-          else if (recorded.role.receiver === myMAC) role = 'Receiver';
-          else role = recorded.role.sender + '→' + recorded.role.receiver;
+          if (roleObj.sender === myMAC) role = 'Sender';
+          else if (roleObj.receiver === myMAC) role = 'Receiver';
+          else role = roleObj.sender + '→' + roleObj.receiver;
         }
-        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
+        let ttlv = '-';
+        // Priority: p2pInfos (survives reconnect) > natHolePunchState (cleared on reconnect)
+        if (punch) {
+          if (role === 'Sender' && punch.senderTTL != null) ttlv = String(punch.senderTTL);
+          else if (role === 'Receiver' && punch.receiverTTL != null) ttlv = String(punch.receiverTTL);
+          else if (punch.ttl != null) ttlv = String(punch.ttl);
+        }
+        if (ttlv === '-' && recorded) {
+          if (role === 'Sender' && recorded.senderTTL != null) ttlv = String(recorded.senderTTL);
+          else if (role === 'Receiver' && recorded.receiverTTL != null) ttlv = String(recorded.receiverTTL);
+          else if (recorded.ttl != null) ttlv = String(recorded.ttl);
+        }
+        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, ttl: ttlv, ladder: (punch && punch.behaviorIndex != null) ? punch.behaviorIndex : '-', status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
       });
       const ipToNum = (ip) => {
         const parts = (ip || '').split('.');
@@ -554,10 +579,10 @@ export class RelayRoom {
         <td colspan="10">
           <table class="sub-table">
             <thead>
-              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
+              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>TTL</th><th>Ladder</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
             </thead>
             <tbody>
-              ${cells.map(c => `<tr><td>${c.mac}</td><td>${c.vip}</td><td>${c.hostname || '-'}</td><td>${c.role}</td><td>${c.raddr}</td><td>${c.ping}</td><td>${c.status}</td><td>${c.duration}</td><td>${c.degrade}</td></tr>`).join('')}
+              ${cells.map(c => `<tr><td>${c.mac}</td><td>${c.vip}</td><td>${c.hostname || '-'}</td><td>${c.role}</td><td>${c.ttl||"-"}</td><td>${c.ladder!=null?c.ladder:"-"}</td><td>${c.raddr}</td><td>${c.ping}</td><td>${c.status}</td><td>${c.duration}</td><td>${c.degrade}</td></tr>`).join('')}
             </tbody>
           </table>
         </td>
@@ -656,12 +681,20 @@ export class RelayRoom {
       if (!info || !Array.isArray(info.to)) return null;
       const entry = info.to.find(x => x && x.macAddr && x.macAddr.toLowerCase() === toMac.toLowerCase());
       if (!entry) return null;
+      console.log('[DEBUG-ROOMDATA] '+fromMac+'->'+toMac+' bi='+entry.behaviorIndex+' biType='+typeof entry.behaviorIndex+' p2pStatus='+entry.p2pStatus+' punchState='+(entry.punchResult&&entry.punchResult.state));
+
       return { 
         punchResult: entry.punchResult || null, 
         p2pStatus: entry.p2pStatus || null,
         pingLatencyMs: entry.pingLatencyMs || null,
         degradeHistory: entry.degradeHistory || null,
         observedRaddr: entry.observedRaddr || null,
+        role: entry.role || null,
+        ttl: entry.ttl != null ? entry.ttl : null,
+        senderTTL: entry.senderTTL != null ? entry.senderTTL : null,
+        receiverTTL: entry.receiverTTL != null ? entry.receiverTTL : null,
+        punchDurationMs: entry.punchDurationMs || null,
+        behaviorIndex: entry.behaviorIndex != null ? entry.behaviorIndex : null,
       };
     };
 
@@ -669,6 +702,7 @@ export class RelayRoom {
       const rows = allPeers.filter(p => p.macAddr.toLowerCase() !== peer.macAddr.toLowerCase());
       const cells = rows.map(other => {
         const punch = punchResultForPair(peer.macAddr, other.macAddr);
+
         let status = '-';
         if (punch && punch.punchResult) {
           if (punch.punchResult.state === 3) status = '✅ P2P';
@@ -690,10 +724,13 @@ export class RelayRoom {
         const punchKey = [peer.macAddr.toLowerCase(), other.macAddr.toLowerCase()].sort().join("|");
         const recorded = this.packetHandler.natHolePunchState.get(punchKey);
         let duration = '-';
-        if (recorded && recorded.durationMs > 0) {
-          duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
+        // Priority: p2pInfos.punchDurationMs (survives reconnect) > punchResult > natHolePunchState
+        if (punch && punch.punchDurationMs && punch.punchDurationMs > 0) {
+          duration = `${(punch.punchDurationMs / 1000).toFixed(1)}s`;
         } else if (punch && punch.punchResult && punch.punchResult.punchDurationMs > 0) {
           duration = `${(punch.punchResult.punchDurationMs / 1000).toFixed(1)}s`;
+        } else if (recorded && recorded.durationMs > 0) {
+          duration = `${(recorded.durationMs / 1000).toFixed(1)}s`;
         }
         const ping = (punch && punch.pingLatencyMs && punch.pingLatencyMs > 0) ? `${punch.pingLatencyMs}ms` : '-';
         const degradeCount = (punch && punch.degradeHistory && punch.degradeHistory.length) || 0;
@@ -701,15 +738,28 @@ export class RelayRoom {
           ? `<span class="degrade-badge" title="${(punch.degradeHistory || []).join('; ')}">⚠️ ${degradeCount}</span>` 
           : '-';
         const hostname = other.desc || (other.os && other.platform ? [other.os, other.platform].filter(Boolean).join(' ') : (other.platform || other.os || '-'));
-        // Determine role from natHolePunchState (persisted after punch completes)
+        // Determine role from p2pInfos (survives reconnect) or natHolePunchState fallback
         let role = '-';
-        if (recorded && recorded.role) {
+        const roleObj = (punch && punch.role) || (recorded && recorded.role);
+        if (roleObj) {
           const myMAC = peer.macAddr.toLowerCase();
-          if (recorded.role.sender === myMAC) role = 'Sender';
-          else if (recorded.role.receiver === myMAC) role = 'Receiver';
-          else role = recorded.role.sender + '→' + recorded.role.receiver;
+          if (roleObj.sender === myMAC) role = 'Sender';
+          else if (roleObj.receiver === myMAC) role = 'Receiver';
+          else role = roleObj.sender + '→' + roleObj.receiver;
         }
-        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
+        let ttlv = '-';
+        // Priority: p2pInfos (survives reconnect) > natHolePunchState (cleared on reconnect)
+        if (punch) {
+          if (role === 'Sender' && punch.senderTTL != null) ttlv = String(punch.senderTTL);
+          else if (role === 'Receiver' && punch.receiverTTL != null) ttlv = String(punch.receiverTTL);
+          else if (punch.ttl != null) ttlv = String(punch.ttl);
+        }
+        if (ttlv === '-' && recorded) {
+          if (role === 'Sender' && recorded.senderTTL != null) ttlv = String(recorded.senderTTL);
+          else if (role === 'Receiver' && recorded.receiverTTL != null) ttlv = String(recorded.receiverTTL);
+          else if (recorded.ttl != null) ttlv = String(recorded.ttl);
+        }
+        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, ttl: ttlv, ladder: (punch && punch.behaviorIndex != null) ? punch.behaviorIndex : '-', status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
       });
       // Sort by virtual IP for stable display.
       const ipToNum = (ip) => {
@@ -740,7 +790,7 @@ export class RelayRoom {
         <td colspan="10">
           <table class="sub-table">
             <thead>
-              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
+              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>TTL</th><th>Ladder</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
             </thead>
             <tbody>
               ${cells.map(c => `
@@ -749,6 +799,8 @@ export class RelayRoom {
                   <td>${c.vip}</td>
                   <td>${c.hostname || '-'}</td>
                   <td>${c.role}</td>
+                  <td>${c.ttl||"-"}</td>
+                  <td>${c.ladder!=null?c.ladder:"-"}</td>
                   <td>${c.raddr}</td>
                   <td>${c.ping}</td>
                   <td>${c.status}</td>

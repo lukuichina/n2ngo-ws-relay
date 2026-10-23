@@ -49,16 +49,16 @@ export const PortsDifferenceThreshold = 5;
 // SetTTL call with `if ttl > 0` (nathole.go:363), so a 0 entry sends a
 // normal, full-path packet on both sides.
 export const mode0Behaviors = [
-  { receiver: { ttl: 7 } },
-  { receiver: { ttl: 7 } },
-  { sender: { ttl: 4 }, receiver: { ttl: 4 } },
-  { receiver: { ttl: 4 }, sender: { ttl: 4 } },
+  { sender: {}, receiver: { ttl: 7 } },
+  { sender: { ttl: 7 }, receiver: {} },
+  { sender: {}, receiver: { ttl: 4 } },
+  { sender: { ttl: 4 }, receiver: {} },
   { sender: {}, receiver: {} },
-  { receiver: {}, sender: {} },
-  { sender: { sendDelayMs: 1000 }, receiver: {} },
-  { sender: { sendDelayMs: 2000 }, receiver: {} },
-  { receiver: {}, sender: { sendDelayMs: 1000 } },
-  { receiver: {}, sender: { sendDelayMs: 2000 } },
+  { sender: {}, receiver: {} },
+  { sender: { sendDelayMs: 5000 }, receiver: {} },
+  { sender: { sendDelayMs: 10000 }, receiver: {} },
+  { sender: {}, receiver: { sendDelayMs: 5000 } },
+  { sender: {}, receiver: { sendDelayMs: 10000 } },
 ];
 
 // Mode 3 behaviour ladder -- analysis.go:52-66. Only the two entries we

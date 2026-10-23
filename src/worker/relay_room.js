@@ -537,7 +537,7 @@ export class RelayRoom {
         const degradeLabel = degradeCount > 0 
           ? `<span class="degrade-badge" title="${(punch.degradeHistory || []).join('; ')}">⚠️ ${degradeCount}</span>` 
           : '-';
-        const hostname = other.desc || (other.os && other.platform ? [other.os, other.platform].filter(Boolean).join(' ') : (other.platform || other.os || '-'));
+        const hostname = other.desc || '';
         // Determine role from p2pInfos (survives reconnect) or natHolePunchState fallback
         let role = '-';
         const roleObj = (punch && punch.role) || (recorded && recorded.role);
@@ -559,7 +559,7 @@ export class RelayRoom {
           else if (role === 'Receiver' && recorded.receiverTTL != null) ttlv = String(recorded.receiverTTL);
           else if (recorded.ttl != null) ttlv = String(recorded.ttl);
         }
-        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, ttl: ttlv, ladder: (punch && punch.behaviorIndex != null) ? punch.behaviorIndex : '-', status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
+        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, ttl: ttlv, ladder: (punch && punch.behaviorIndex != null) ? punch.behaviorIndex : '-', sendDelay: (recorded && recorded.sendDelayMs != null) ? recorded.sendDelayMs : (punch && punch.sendDelayMs != null) ? punch.sendDelayMs : '-', status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
       });
       const ipToNum = (ip) => {
         const parts = (ip || '').split('.');
@@ -575,7 +575,7 @@ export class RelayRoom {
       return `
       <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="var nr=this.nextElementSibling; var disp=nr.style.display==='none'?'table-row':'none'; nr.style.display=disp; var ic=this.querySelector('.expand-icon'); if(ic){ic.textContent=disp==='table-row'?'▼':'▶';} setTimeout(saveExpandedState,0);">
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
-        <td>${peer.desc || '-'}</td>
+        <td>${peer.desc || ''}</td>
         <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
         <td>${peer.arch || '-'}</td>
         <td>${formatIp(peer.virtualIP)}</td>
@@ -591,10 +591,10 @@ export class RelayRoom {
         <td colspan="10">
           <table class="sub-table">
             <thead>
-              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>TTL</th><th>Ladder</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
+              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>TTL</th><th>Ladder</th><th>SendDelay</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
             </thead>
             <tbody>
-              ${cells.map(c => `<tr><td>${c.mac}</td><td>${c.vip}</td><td>${c.hostname || '-'}</td><td>${c.role}</td><td>${c.ttl||"-"}</td><td>${c.ladder!=null?c.ladder:"-"}</td><td>${c.raddr}</td><td>${c.ping}</td><td>${c.status}</td><td>${c.duration}</td><td>${c.degrade}</td></tr>`).join('')}
+              ${cells.map(c => `<tr><td>${c.mac}</td><td>${c.vip}</td><td>${c.hostname || '-'}</td><td>${c.role}</td><td>${c.ttl||"-"}</td><td>${c.ladder!=null?c.ladder:"-"}</td><td>${c.sendDelay!=null&&c.sendDelay!=='-'?c.sendDelay+'ms':'-'}</td><td>${c.raddr}</td><td>${c.ping}</td><td>${c.status}</td><td>${c.duration}</td><td>${c.degrade}</td></tr>`).join('')}
             </tbody>
           </table>
         </td>
@@ -759,7 +759,7 @@ export class RelayRoom {
         const degradeLabel = degradeCount > 0 
           ? `<span class="degrade-badge" title="${(punch.degradeHistory || []).join('; ')}">⚠️ ${degradeCount}</span>` 
           : '-';
-        const hostname = other.desc || (other.os && other.platform ? [other.os, other.platform].filter(Boolean).join(' ') : (other.platform || other.os || '-'));
+        const hostname = other.desc || '';
         // Determine role from p2pInfos (survives reconnect) or natHolePunchState fallback
         let role = '-';
         const roleObj = (punch && punch.role) || (recorded && recorded.role);
@@ -781,7 +781,7 @@ export class RelayRoom {
           else if (role === 'Receiver' && recorded.receiverTTL != null) ttlv = String(recorded.receiverTTL);
           else if (recorded.ttl != null) ttlv = String(recorded.ttl);
         }
-        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, ttl: ttlv, ladder: (punch && punch.behaviorIndex != null) ? punch.behaviorIndex : '-', status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
+        return { mac: other.macAddr, vip: formatIp(other.virtualIP), desc: other.desc || '-', role, ttl: ttlv, ladder: (punch && punch.behaviorIndex != null) ? punch.behaviorIndex : '-', sendDelay: (recorded && recorded.sendDelayMs != null) ? recorded.sendDelayMs : (punch && punch.sendDelayMs != null) ? punch.sendDelayMs : '-', status, duration, degrade: degradeLabel, ping, raddr: punch && punch.observedRaddr || '-', hostname };
       });
       // Sort by virtual IP for stable display.
       const ipToNum = (ip) => {
@@ -798,7 +798,7 @@ export class RelayRoom {
       return `
       <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="var nr=this.nextElementSibling; var disp=nr.style.display==='none'?'table-row':'none'; nr.style.display=disp; var ic=this.querySelector('.expand-icon'); if(ic){ic.textContent=disp==='table-row'?'▼':'▶';} setTimeout(saveExpandedState,0);">
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
-        <td>${peer.desc || '-'}</td>
+        <td>${peer.desc || ''}</td>
         <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
         <td>${peer.arch || '-'}</td>
         <td>${formatIp(peer.virtualIP)}</td>
@@ -814,7 +814,7 @@ export class RelayRoom {
         <td colspan="10">
           <table class="sub-table">
             <thead>
-              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>TTL</th><th>Ladder</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
+              <tr><th>其它节点</th><th>虚拟IP</th><th>主机名</th><th>Role</th><th>TTL</th><th>Ladder</th><th>SendDelay</th><th>P2PRaddr</th><th>Ping</th><th>P2P/Relay状态</th><th>打洞耗时</th><th>降级历史</th></tr>
             </thead>
             <tbody>
               ${cells.map(c => `
@@ -825,6 +825,7 @@ export class RelayRoom {
                   <td>${c.role}</td>
                   <td>${c.ttl||"-"}</td>
                   <td>${c.ladder!=null?c.ladder:"-"}</td>
+                  <td>${c.sendDelay!=null&&c.sendDelay!=='-'?c.sendDelay+'ms':'-'}</td>
                   <td>${c.raddr}</td>
                   <td>${c.ping}</td>
                   <td>${c.status}</td>
@@ -848,7 +849,7 @@ export class RelayRoom {
   <title>Community: ${token}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; margin: 0; padding: 2rem; }
-    .container { max-width: 1200px; margin: 0 auto; }
+    .container { max-width: 1600px; margin: 0 auto; }
     h1 { color: #333; }
     .stats { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
     .stat-card { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex: 1; text-align: center; }
@@ -880,7 +881,7 @@ export class RelayRoom {
     </div>
     <table>
       <thead>
-        <tr><th>MAC Address</th><th>Hostname</th><th>OS</th><th>Virtual IP</th><th>Public Socket</th><th>P2P Endpoint</th><th>NAT Type</th><th>Status</th><th>Capabilities</th><th>Last Seen</th></tr>
+        <tr><th>MAC Address</th><th>Hostname</th><th>OS</th><th>Arch</th><th>Virtual IP</th><th>Public Socket</th><th>P2P Endpoint</th><th>NAT Type</th><th>Status</th><th>Capabilities</th><th>Last Seen</th><th>Online Time</th></tr>
       </thead>
       <tbody>
         ${onlinePeers.map(p => row(p, true, allPeers)).join('')}

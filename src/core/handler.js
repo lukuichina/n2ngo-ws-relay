@@ -987,8 +987,8 @@ export class PacketHandler {
       detail: result.detail || "",
       at: Date.now(),
       behaviorIndex: rung != null ? rung : prev ? prev.behaviorIndex : null,
-      durationMs: (result.punchDurationMs && result.punchDurationMs > 0) ? result.punchDurationMs :
-        (prev && prev.at && Date.now() - prev.at > 0 ? Date.now() - prev.at : (prev && prev.durationMs ? prev.durationMs : 0)),
+      durationMs: (result.punchDurationMs && result.punchDurationMs > 0) ? result.punchDurationMs : 0,
+      sendDelayMs: (prev && prev.sendDelayMs != null) ? prev.sendDelayMs : 0,
       role: role || (prev && prev.role) || null,
       // Store both TTLs separately so each edge can pick its own side's TTL.
       // A single ttl field is ambiguous: the last reporter wins, and the
@@ -1614,6 +1614,7 @@ export class PacketHandler {
             at: now,
             behaviorIndex: behaviorIndex,
             durationMs: 0,
+            sendDelayMs: (result.senderInstruction && result.senderInstruction.sendDelayMs) || 0,
             role: { sender: result.senderMAC.toLowerCase(), receiver: result.receiverMAC.toLowerCase() },
             senderTTL: (result.senderInstruction && result.senderInstruction.ttl) || null,
             receiverTTL: (result.receiverInstruction && result.receiverInstruction.ttl) || null,
@@ -2216,19 +2217,49 @@ export class PacketHandler {
         if (t && t.macAddr) {
           const pk = pairKeyFor(connInfo.macAddr, t.macAddr);
           const recorded = this.natHolePunchState.get(pk);
-          if (recorded) {
-            const info = commState.p2pInfos.get(String(connInfo.macAddr).toLowerCase());
-            if (info && Array.isArray(info.to)) {
-              const entry = info.to.find(x => x && x.macAddr && String(x.macAddr).toLowerCase() === String(t.macAddr).toLowerCase());
-              if (entry) {
-                if (!entry.role && recorded.role) entry.role = recorded.role;
-                if (entry.ttl == null && recorded.ttl != null) entry.ttl = recorded.ttl;
-                if (entry.senderTTL == null && recorded.senderTTL != null) entry.senderTTL = recorded.senderTTL;
-                if (entry.receiverTTL == null && recorded.receiverTTL != null) entry.receiverTTL = recorded.receiverTTL;
-                if (entry.behaviorIndex == null && recorded.behaviorIndex != null) entry.behaviorIndex = recorded.behaviorIndex;
-                if (!entry.punchDurationMs && recorded.durationMs > 0) entry.punchDurationMs = recorded.durationMs;
-                if (!entry.observedRaddr && recorded.observedRaddr) entry.observedRaddr = recorded.observedRaddr;
-                if ((!entry.degradeHistory || !entry.degradeHistory.length) && recorded.degradeHistory && recorded.degradeHistory.length) entry.degradeHistory = recorded.degradeHistory;
+          const info = commState.p2pInfos.get(String(connInfo.macAddr).toLowerCase());
+          if (info && Array.isArray(info.to)) {
+            const entry = info.to.find(x => x && x.macAddr && String(x.macAddr).toLowerCase() === String(t.macAddr).toLowerCase());
+            if (entry) {
+              // Recover role from natHolePunchState or commState (always try, not just when recorded exists)
+              if (!entry.role) {
+                if (recorded && recorded.role) {
+                  entry.role = recorded.role;
+                } else {
+                  // Determine role from commState peers' pubSockets
+                  const peerA = commState.p2pInfos.get(String(connInfo.macAddr).toLowerCase());
+                  const peerB = commState.p2pInfos.get(String(t.macAddr).toLowerCase());
+                  if (peerA && peerB) {
+                    const portA = parseInt((peerA.from && peerA.from.pubSocket || "").split(":").pop()) || 0;
+                    const portB = parseInt((peerB.from && peerB.from.pubSocket || "").split(":").pop()) || 0;
+                    const senderMAC = portA <= portB ? connInfo.macAddr : t.macAddr;
+                    entry.role = { sender: String(senderMAC).toLowerCase(), receiver: String(senderMAC === connInfo.macAddr ? t.macAddr : connInfo.macAddr).toLowerCase() };
+                  }
+                }
+              }
+              if (recorded || (t && t.punchResult)) {
+                if (entry.ttl == null) {
+                if (recorded && recorded.ttl != null) entry.ttl = recorded.ttl;
+                else if (entry.role) entry.ttl = 0;
+              }
+                if (entry.senderTTL == null && recorded && recorded.senderTTL != null) entry.senderTTL = recorded.senderTTL;
+                if (entry.receiverTTL == null && recorded && recorded.receiverTTL != null) entry.receiverTTL = recorded.receiverTTL;
+                if (entry.behaviorIndex == null) {
+                  if (recorded && recorded.behaviorIndex != null) entry.behaviorIndex = recorded.behaviorIndex;
+                  else if (t.punchResult && t.punchResult.behaviorIndex != null) entry.behaviorIndex = t.punchResult.behaviorIndex;
+                }
+                if (!entry.punchDurationMs) {
+                  if (recorded && recorded.durationMs > 0) entry.punchDurationMs = recorded.durationMs;
+                  else if (t.punchResult && t.punchResult.punchDurationMs > 0) entry.punchDurationMs = t.punchResult.punchDurationMs;
+                  else if (t.p2pStatus === 3) entry.punchDurationMs = 1; // show 0.0s instead of -
+                }
+                // Recover sendDelayMs (always try, not just when recorded exists)
+              if (entry.sendDelayMs == null) {
+                if (recorded && recorded.sendDelayMs != null) entry.sendDelayMs = recorded.sendDelayMs;
+                else entry.sendDelayMs = 0;
+              }
+                if (!entry.observedRaddr && recorded && recorded.observedRaddr) entry.observedRaddr = recorded.observedRaddr;
+                if ((!entry.degradeHistory || !entry.degradeHistory.length) && recorded && recorded.degradeHistory && recorded.degradeHistory.length) entry.degradeHistory = recorded.degradeHistory;
               }
             }
           }

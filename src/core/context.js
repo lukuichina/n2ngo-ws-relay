@@ -322,14 +322,25 @@ export class CommunityState {
         if (prev) {
           // Edge fields win (fresh observation); relay-only fields survive.
           const preserved = {};
-          for (const f of ["role", "senderTTL", "receiverTTL", "punchDurationMs", "behaviorIndex", "degradeHistory"]) {
-            if (prev[f] != null) preserved[f] = prev[f];
+          for (const f of ["role", "senderTTL", "receiverTTL", "punchDurationMs", "behaviorIndex", "degradeHistory", "sendDelayMs"]) {
+            if (prev[f] != null && prev[f] !== 0 && !(Array.isArray(prev[f]) && prev[f].length === 0)) preserved[f] = prev[f];
           }
+          // Also preserve punchDurationMs if prev has a non-zero value
+          if (prev.punchDurationMs && prev.punchDurationMs > 0) preserved.punchDurationMs = prev.punchDurationMs;
+          // Preserve behaviorIndex if prev has a non-null value
+          if (prev.behaviorIndex != null) preserved.behaviorIndex = prev.behaviorIndex;
           console.log('[DEBUG-SETPI-MERGE] k='+k+' prevBI='+(prev.behaviorIndex!=null?prev.behaviorIndex:'null')+' tBI='+(t.behaviorIndex!=null?t.behaviorIndex:'null')+' preservedBI='+(preserved.behaviorIndex!=null?preserved.behaviorIndex:'null'));
           // ttl is relay-derived from the per-side values; keep it too so the
           // UI does not flicker to "-" between a report and the next render.
           if (prev.ttl != null) preserved.ttl = prev.ttl;
-          byMac.set(k, { ...preserved, ...t });
+          // Only overwrite preserved fields if t has a non-zero/non-null value
+        const merged = { ...preserved, ...t };
+        for (const f of ["punchDurationMs", "behaviorIndex"]) {
+          if (t[f] == null || t[f] === 0) {
+            if (preserved[f] != null && preserved[f] !== 0) merged[f] = preserved[f];
+          }
+        }
+        byMac.set(k, merged);
         } else {
           byMac.set(k, t);
         }

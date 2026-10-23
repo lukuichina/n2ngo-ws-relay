@@ -55,10 +55,10 @@ export const mode0Behaviors = [
   { receiver: { ttl: 4 }, sender: { ttl: 4 } },
   { sender: {}, receiver: {} },
   { receiver: {}, sender: {} },
-  { sender: { sendDelayMs: 5000 }, receiver: {} },
-  { sender: { sendDelayMs: 10000 }, receiver: {} },
-  { receiver: {}, sender: { sendDelayMs: 5000 } },
-  { receiver: {}, sender: { sendDelayMs: 10000 } },
+  { sender: { sendDelayMs: 1000 }, receiver: {} },
+  { sender: { sendDelayMs: 2000 }, receiver: {} },
+  { receiver: {}, sender: { sendDelayMs: 1000 } },
+  { receiver: {}, sender: { sendDelayMs: 2000 } },
 ];
 
 // Mode 3 behaviour ladder -- analysis.go:52-66. Only the two entries we

@@ -468,6 +468,16 @@ export class RelayRoom {
 
     const formatIp = (num) => `${(num >>> 24) & 255}.${(num >>> 16) & 255}.${(num >>> 8) & 255}.${num & 255}`;
 
+    const formatDuration = (seconds) => {
+      if (!seconds || seconds < 0) return '-';
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    };
+
     const punchResultForPair = (fromMac, toMac) => {
       if (!commState || !commState.p2pInfos) return null;
       const info = commState.p2pInfos.get(fromMac);
@@ -567,6 +577,7 @@ export class RelayRoom {
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
         <td>${peer.desc || '-'}</td>
         <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
+        <td>${peer.arch || '-'}</td>
         <td>${formatIp(peer.virtualIP)}</td>
         <td>${peer.pubSocket || '-'}</td>
         <td>${peer.p2pEndpoint || '-'}</td>
@@ -574,6 +585,7 @@ export class RelayRoom {
         <td>${isOnline ? '🟢 Online' : '🔴 Offline'}</td>
         <td>${(peer.p2pCapabilities || []).join(', ') || '-'}</td>
         <td>${peer.lastSeen ? new Date(peer.lastSeen * 1000).toLocaleString() : '-'}</td>
+        <td>${isOnline && peer.registeredAt ? formatDuration(Math.floor(Date.now() / 1000) - peer.registeredAt) : '-'}</td>
       </tr>
       <tr class="detail-row" style="display:none">
         <td colspan="10">
@@ -674,6 +686,16 @@ export class RelayRoom {
 
   getRoomHTML(token, commState, onlinePeers, offlinePeers) {
     const formatIp = (num) => `${(num >>> 24) & 255}.${(num >>> 16) & 255}.${(num >>> 8) & 255}.${num & 255}`;
+
+    const formatDuration = (seconds) => {
+      if (!seconds || seconds < 0) return '-';
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    };
 
     const punchResultForPair = (fromMac, toMac) => {
       if (!commState || !commState.p2pInfos) return null;
@@ -778,6 +800,7 @@ export class RelayRoom {
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
         <td>${peer.desc || '-'}</td>
         <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
+        <td>${peer.arch || '-'}</td>
         <td>${formatIp(peer.virtualIP)}</td>
         <td>${peer.pubSocket || '-'}</td>
         <td>${peer.p2pEndpoint || '-'}</td>
@@ -785,6 +808,7 @@ export class RelayRoom {
         <td>${isOnline ? '🟢 Online' : '🔴 Offline'}</td>
         <td>${peer.p2pCapabilities?.join(', ') || '-'}</td>
         <td>${peer.lastSeen ? new Date(peer.lastSeen * 1000).toLocaleString() : '-'}</td>
+        <td>${isOnline && peer.registeredAt ? formatDuration(Math.floor(Date.now() / 1000) - peer.registeredAt) : '-'}</td>
       </tr>
       <tr class="detail-row" style="display:none">
         <td colspan="10">

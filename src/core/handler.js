@@ -922,6 +922,18 @@ export class PacketHandler {
         }
       }
     }
+    // Fallback: determine role from commState peers' pubSockets (lower port = sender)
+    if (!role && commState && commState.p2pInfos) {
+      const peerA = commState.p2pInfos.get(String(reporterMAC).toLowerCase());
+      const peerB = commState.p2pInfos.get(String(peerMAC).toLowerCase());
+      if (peerA && peerB) {
+        const portA = parseInt((peerA.from && peerA.from.pubSocket || "").split(":").pop()) || 0;
+        const portB = parseInt((peerB.from && peerB.from.pubSocket || "").split(":").pop()) || 0;
+        const senderMAC = portA <= portB ? reporterMAC : peerMAC;
+        const receiverMAC = portA <= portB ? peerMAC : reporterMAC;
+        role = { sender: String(senderMAC).toLowerCase(), receiver: String(receiverMAC).toLowerCase() };
+      }
+    }
     // Any verdict clears the in-flight rung: whatever we sent has now been
     // answered, so the pair is eligible for the next decision. This is the only
     // thing that releases the guard on the happy path -- a rung held by
@@ -965,20 +977,25 @@ export class PacketHandler {
     if (ttl == null && result && result.ttl != null) {
       ttl = result.ttl;
     }
+    // Final fallback: 0 for sender side (most common case for EasyNAT)
+    if (ttl == null) {
+      ttl = 0;
+    }
     this.natHolePunchState.set(key, {
       state,
       attempts: result.attempts || 0,
       detail: result.detail || "",
       at: Date.now(),
       behaviorIndex: rung != null ? rung : prev ? prev.behaviorIndex : null,
-      durationMs: (result.punchDurationMs && result.punchDurationMs > 0) ? result.punchDurationMs : (prev && prev.durationMs ? prev.durationMs : 0),
+      durationMs: (result.punchDurationMs && result.punchDurationMs > 0) ? result.punchDurationMs :
+        (prev && prev.at && Date.now() - prev.at > 0 ? Date.now() - prev.at : (prev && prev.durationMs ? prev.durationMs : 0)),
       role: role || (prev && prev.role) || null,
       // Store both TTLs separately so each edge can pick its own side's TTL.
       // A single ttl field is ambiguous: the last reporter wins, and the
       // two edges in a pair may legitimately have different TTLs (sender=0,
       // receiver=7 on ladder mode0).
-      senderTTL: (flight && flight.senderTTL != null) ? flight.senderTTL : (prev && prev.senderTTL != null ? prev.senderTTL : null),
-      receiverTTL: (flight && flight.receiverTTL != null) ? flight.receiverTTL : (prev && prev.receiverTTL != null ? prev.receiverTTL : null),
+      senderTTL: (flight && flight.senderTTL != null) ? flight.senderTTL : (prev && prev.senderTTL != null ? prev.senderTTL : 0),
+      receiverTTL: (flight && flight.receiverTTL != null) ? flight.receiverTTL : (prev && prev.receiverTTL != null ? prev.receiverTTL : 7),
       // Keep ttl for backward compat (last-writer-wins, used as fallback)
       ttl: (ttl != null) ? ttl : (prev && prev.ttl) || null,
     });
@@ -1585,6 +1602,24 @@ export class PacketHandler {
           senderTTL: result.senderInstruction && result.senderInstruction.ttl,
           receiverTTL: result.receiverInstruction && result.receiverInstruction.ttl,
         });
+        // Pre-store role in natHolePunchState so it survives even if
+        // natHoleInFlight is cleared before recordPunchResult runs.
+        const _roleKey = pairKey;
+        const _prevRole = this.natHolePunchState.get(_roleKey);
+        if (!_prevRole || !_prevRole.role) {
+          this.natHolePunchState.set(_roleKey, {
+            state: 1, // in-progress
+            attempts: 0,
+            detail: "",
+            at: now,
+            behaviorIndex: behaviorIndex,
+            durationMs: 0,
+            role: { sender: result.senderMAC.toLowerCase(), receiver: result.receiverMAC.toLowerCase() },
+            senderTTL: (result.senderInstruction && result.senderInstruction.ttl) || null,
+            receiverTTL: (result.receiverInstruction && result.receiverInstruction.ttl) || null,
+            ttl: null,
+          });
+        }
         paired.add(result.senderMAC);
         paired.add(result.receiverMAC);
         console.log(`[coordinateNatHole] pair ${pairKey} scheduled (roles ${signature}), backoff=${backoffMs}ms`);
@@ -2137,7 +2172,15 @@ export class PacketHandler {
         // relay is blind: it can neither confirm success nor prioritise a
         // retry, and just keeps pushing instructions forever.
         if (t && t.punchResult && t.punchResultPeerMac) {
-          // Try to extract role from in-flight context if not already in result
+          // Skip re-processing if this punch result is identical to what we
+          // already have cached (prevents duplicate failCount increments when
+          // the edge re-sends a cached lastPunchResult on every refresh).
+          const _pk = pairKeyFor(connInfo.macAddr, t.punchResultPeerMac);
+          const _prev = this.natHolePunchState.get(_pk);
+          const _isDup = _prev && _prev.state === t.punchResult.state &&
+              _prev.attempts === (t.punchResult.attempts || 0) &&
+              _prev.behaviorIndex === t.punchResult.behaviorIndex;
+          if (!_isDup) {
           const pairKey2 = [connInfo.macAddr.toLowerCase(), t.punchResultPeerMac.toLowerCase()].sort().join("|");
           let res = t.punchResult;
           const flight2 = this.natHoleInFlight.get(pairKey2);
@@ -2156,6 +2199,7 @@ export class PacketHandler {
             }
           }
           this.recordPunchResult(connInfo.macAddr, t.punchResultPeerMac, res, commState);
+          }
         }
         // The edge only carries punchResult at the moment of success; after
         // that it sends p2pStatus=3 with punchResult=null, so
@@ -2165,19 +2209,26 @@ export class PacketHandler {
         // edge going quiet. Without this the Ladder column shows "-" for a
         // pair that is ✅ P2P.
         console.log('[DEBUG-RBI-CHECK] '+connInfo.macAddr+'->'+t.macAddr+' p2pStatus='+t.p2pStatus+' bi='+t.behaviorIndex+' biType='+typeof t.behaviorIndex);
-        if (t && t.macAddr && t.p2pStatus === 3 && t.behaviorIndex == null) {
+        // Cache recovery: persist role/ttl/senderTTL/receiverTTL/behaviorIndex/
+        // punchDurationMs/observedRaddr from natHolePunchState so they don't
+        // disappear on the next P2PStateInfo refresh (which carries them only
+        // during active punch).
+        if (t && t.macAddr) {
           const pk = pairKeyFor(connInfo.macAddr, t.macAddr);
           const recorded = this.natHolePunchState.get(pk);
-          console.log('[DEBUG-RBI-DETAIL] pk='+pk+' recorded='+JSON.stringify(recorded)+' stateSize='+this.natHolePunchState.size+' keys='+JSON.stringify([...this.natHolePunchState.keys()]));
-          if (recorded && recorded.behaviorIndex != null) {
+          if (recorded) {
             const info = commState.p2pInfos.get(String(connInfo.macAddr).toLowerCase());
-            console.log('[DEBUG-RBI-DETAIL] info='+!!info+' infoToLen='+(info && Array.isArray(info.to) ? info.to.length : 0));
             if (info && Array.isArray(info.to)) {
               const entry = info.to.find(x => x && x.macAddr && String(x.macAddr).toLowerCase() === String(t.macAddr).toLowerCase());
-              console.log('[DEBUG-RBI-DETAIL] entry='+!!entry+' entryBI='+(entry && entry.behaviorIndex));
-              if (entry && entry.behaviorIndex == null) {
-                console.log(`[DEBUG-RecoverBI] ${connInfo.macAddr}->${t.macAddr} recovered behaviorIndex=${recorded.behaviorIndex} from natHolePunchState`);
-                entry.behaviorIndex = recorded.behaviorIndex;
+              if (entry) {
+                if (!entry.role && recorded.role) entry.role = recorded.role;
+                if (entry.ttl == null && recorded.ttl != null) entry.ttl = recorded.ttl;
+                if (entry.senderTTL == null && recorded.senderTTL != null) entry.senderTTL = recorded.senderTTL;
+                if (entry.receiverTTL == null && recorded.receiverTTL != null) entry.receiverTTL = recorded.receiverTTL;
+                if (entry.behaviorIndex == null && recorded.behaviorIndex != null) entry.behaviorIndex = recorded.behaviorIndex;
+                if (!entry.punchDurationMs && recorded.durationMs > 0) entry.punchDurationMs = recorded.durationMs;
+                if (!entry.observedRaddr && recorded.observedRaddr) entry.observedRaddr = recorded.observedRaddr;
+                if ((!entry.degradeHistory || !entry.degradeHistory.length) && recorded.degradeHistory && recorded.degradeHistory.length) entry.degradeHistory = recorded.degradeHistory;
               }
             }
           }

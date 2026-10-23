@@ -102,3 +102,4 @@ export const VIRTUAL_NETWORK_END = 0x6440FFFF;   // 100.64.255.254
 // 默认 MTU
 export const DEFAULT_MTU = 1280;
 export const VFuze_HEADER_SIZE = 7; // Go: ProtoVFuzeSize = 7 (Version(1) + DestMAC(6))
+export const VERSION_VFUZE = 0x51; // VFuze 包版本号，对齐 Go 侧 ProtoVFuze 包首字节 0x51

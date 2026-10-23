@@ -19,6 +19,7 @@ import {
   parseMAC,
   formatMAC,
   numberToIp,
+  VERSION_VFUZE,
 } from "./constants.js";
 import {
   parseProtoVHeader,
@@ -2486,6 +2487,9 @@ export class PacketHandler {
    *
    * 注意：Go 侧 handleVFuze 没有 ForwardWithFallBack 回退逻辑。
    * VFuze 包是打洞包，目标不可达时直接丢弃，不走广播。
+   * 
+   * 特殊处理：对于广播 MAC（ff:ff:ff:ff:ff:ff），VFuze 路径也需要支持广播兜底
+   * 以处理 ARP 等依赖广播的 L2 协议在 VFuze 路径下的转发问题。
    */
   async handleVFuzePacket(ws, buf) {
     try {
@@ -2515,15 +2519,44 @@ export class PacketHandler {
       //   dstedge, dstok := s.edgesByMAC[dst.String()]
       //   srcedge, srcok := s.edgesBySocket[addr.String()]
       //   if !dstok || !srcok { return }  // 丢弃，不回退
-      const dstPeer = commState.getPeer(dstMAC);
       const srcPeer = commState.getPeer(srcMAC);
 
-      if (!dstPeer || !srcPeer) {
-        console.log(`[PacketHandler] VFuze: dropping - dstPeer=${!!dstPeer} srcPeer=${!!srcPeer} ` +
-          `srcMAC=${srcMAC} dstMAC=${dstMAC}`);
+      if (!srcPeer) {
+        console.log(`[PacketHandler] VFuze: dropping - srcPeer not found srcMAC=${srcMAC} dstMAC=${dstMAC}`);
         return;
       }
 
+      // 广播 MAC（ARP 等）走类似 ForwardWithFallBack 的广播逻辑
+      // 以解决 enableFuze=true 时 ipv6-only 节点 ARP 广播无法到达的问题
+      if (dstMAC === "ff:ff:ff:ff:ff:ff") {
+        // 对齐 Go 侧社区匹配校验
+        if (srcPeer.community !== srcCommunity) {
+          console.log(`[PacketHandler] VFuze: community mismatch for broadcast - src=${srcPeer.community}, dropping`);
+          return;
+        }
+        console.log(`[PacketHandler] VFuze: broadcast to ${dstMAC} from ${srcMAC}, using fallback broadcast`);
+        const onlinePeers = commState.getOnlinePeers();
+        let sent = 0;
+        for (const p of onlinePeers) {
+          if (!p.ws || p.ws.readyState !== WebSocket.OPEN) continue;
+          if (p.macAddr === srcMAC) continue;
+          try {
+            await p.ws.send(buf);
+            sent++;
+            console.log(`[PacketHandler] VFuze: broadcast forwarded to ${p.macAddr}`);
+          } catch (e) {
+            console.error(`[PacketHandler] VFuze: broadcast to ${p.macAddr} failed:`, e.message);
+          }
+        }
+        console.log(`[PacketHandler] VFuze: broadcast forwarded to ${sent} online peer(s) (sender=${srcMAC})`);
+        return;
+      }
+
+      const dstPeer = commState.getPeer(dstMAC);
+      if (!dstPeer) {
+        console.log(`[PacketHandler] VFuze: dropping - dstPeer not found srcMAC=${srcMAC} dstMAC=${dstMAC}`);
+        return;
+      }
       // 对齐 Go 侧社区匹配校验：
       //   if dstedge.Community != srcedge.Community { return }
       if (dstPeer.community !== srcPeer.community) {
@@ -2692,6 +2725,10 @@ export class PacketHandler {
 
     const targetPeer = commState.getPeer(dstMAC);
 
+    // DEBUG: 打印 targetPeer 完整状态，排查 relay 模式下 E5 收不到单播数据帧的问题
+    console.log(`[PacketHandler] ForwardWithFallBack: dstMAC=${dstMAC} srcMAC=${srcMAC} ` +
+      `targetPeer=${targetPeer ? JSON.stringify({macAddr: targetPeer.macAddr, online: targetPeer.online, hasWs: !!targetPeer.ws, readyState: targetPeer.ws ? targetPeer.ws.readyState : 'N/A'}) : 'NULL'}`);
+
     // 尝试单播转发
     if (targetPeer && targetPeer.online && targetPeer.ws) {
       // FIX: Check readyState before sending (sendPacket does this, but ForwardWithFallBack was missing it)
@@ -2716,13 +2753,43 @@ export class PacketHandler {
       `(sender=${srcMAC})`);
 
     for (const p of onlinePeers) {
-      if (p.ws && p.ws !== ws && p.ws.readyState === WebSocket.OPEN) {
-        try {
-          await p.ws.send(snBuf);
-          console.log(`[PacketHandler] ForwardWithFallBack:   -> broadcast forwarded to ${p.macAddr} (FlagFromSuperNode set)`);
-        } catch (e) {
-          console.error(`[PacketHandler] ForwardWithFallBack:   -> ERROR broadcasting to ${p.macAddr}: ${e.message}`);
+      // Resolve the current ws for this peer. If the stored peer.ws is
+      // stale (closed/not-open), look it up from relayRoom.connections
+      // which always reflects the latest live connection.
+      let peerWs = p.ws;
+      if (!peerWs || peerWs.readyState !== WebSocket.OPEN) {
+        // Try to find a live ws for this macAddr from relayRoom.connections
+        if (this.relayRoom && this.relayRoom.connections) {
+          for (const [connWs, connInfo] of this.relayRoom.connections) {
+            if (connInfo && connInfo.macAddr && connInfo.macAddr.toLowerCase() === p.macAddr.toLowerCase()) {
+              if (connWs.readyState === WebSocket.OPEN) {
+                peerWs = connWs;
+                console.log(`[PacketHandler] ForwardWithFallBack:   -> resolved live ws for ${p.macAddr} from relayRoom.connections (old ws state=${p.ws ? p.ws.readyState : 'null'})`);
+                break;
+              }
+            }
+          }
         }
+      }
+
+      if (!peerWs) {
+        console.log(`[PacketHandler] ForwardWithFallBack:   -> SKIP ${p.macAddr}: no ws available (peer.ws=${p.ws ? p.ws.readyState : 'null'})`);
+        continue;
+      }
+      if (peerWs === ws) {
+        console.log(`[PacketHandler] ForwardWithFallBack:   -> SKIP ${p.macAddr}: sender's own ws`);
+        continue;
+      }
+      if (peerWs.readyState !== WebSocket.OPEN) {
+        console.log(`[PacketHandler] ForwardWithFallBack:   -> SKIP ${p.macAddr}: ws not OPEN (state=${peerWs.readyState})`);
+        continue;
+      }
+
+      try {
+        await peerWs.send(snBuf);
+        console.log(`[PacketHandler] ForwardWithFallBack:   -> broadcast forwarded to ${p.macAddr} (FlagFromSuperNode set)`);
+      } catch (e) {
+        console.error(`[PacketHandler] ForwardWithFallBack:   -> ERROR broadcasting to ${p.macAddr}: ${e.message}`);
       }
     }
   }

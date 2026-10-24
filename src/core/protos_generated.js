@@ -346,6 +346,8 @@ export const n2n = $root.n2n = (() => {
          * @property {string|null} [natType] RegisterRequest natType
          * @property {string|null} [pubSocket] RegisterRequest pubSocket
          * @property {Array.<string>|null} [assistedSockets] RegisterRequest assistedSockets
+         * @property {string|null} [edgeVersion] RegisterRequest edgeVersion
+         * @property {string|null} [edgeMd5] RegisterRequest edgeMd5
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -460,6 +462,22 @@ export const n2n = $root.n2n = (() => {
         RegisterRequest.prototype.assistedSockets = $util.emptyArray;
 
         /**
+         * RegisterRequest edgeVersion.
+         * @member {string} edgeVersion
+         * @memberof n2n.RegisterRequest
+         * @instance
+         */
+        RegisterRequest.prototype.edgeVersion = "";
+
+        /**
+         * RegisterRequest edgeMd5.
+         * @member {string} edgeMd5
+         * @memberof n2n.RegisterRequest
+         * @instance
+         */
+        RegisterRequest.prototype.edgeMd5 = "";
+
+        /**
          * Creates a new RegisterRequest instance using the specified properties.
          * @function create
          * @memberof n2n.RegisterRequest
@@ -513,6 +531,10 @@ export const n2n = $root.n2n = (() => {
             if (message.assistedSockets != null && message.assistedSockets.length)
                 for (let i = 0; i < message.assistedSockets.length; ++i)
                     writer.uint32(/* id 10, wireType 2 =*/82).string(message.assistedSockets[i]);
+            if (message.edgeVersion != null && $Object.hasOwnProperty.call(message, "edgeVersion") && message.edgeVersion !== "")
+                writer.uint32(/* id 11, wireType 2 =*/90).string(message.edgeVersion);
+            if (message.edgeMd5 != null && $Object.hasOwnProperty.call(message, "edgeMd5") && message.edgeMd5 !== "")
+                writer.uint32(/* id 12, wireType 2 =*/98).string(message.edgeMd5);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -658,6 +680,24 @@ export const n2n = $root.n2n = (() => {
                         message.assistedSockets.push(reader.stringVerify());
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.edgeVersion = value;
+                        else
+                            delete message.edgeVersion;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.edgeMd5 = value;
+                        else
+                            delete message.edgeMd5;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -744,6 +784,12 @@ export const n2n = $root.n2n = (() => {
                     if (!$util.isString(message.assistedSockets[i]))
                         return "assistedSockets: string[] expected";
             }
+            if (message.edgeVersion != null && $Object.hasOwnProperty.call(message, "edgeVersion"))
+                if (!$util.isString(message.edgeVersion))
+                    return "edgeVersion: string expected";
+            if (message.edgeMd5 != null && $Object.hasOwnProperty.call(message, "edgeMd5"))
+                if (!$util.isString(message.edgeMd5))
+                    return "edgeMd5: string expected";
             return null;
         };
 
@@ -809,6 +855,12 @@ export const n2n = $root.n2n = (() => {
                 for (let i = 0; i < object.assistedSockets.length; ++i)
                     message.assistedSockets[i] = $String(object.assistedSockets[i]);
             }
+            if (object.edgeVersion != null)
+                if (typeof object.edgeVersion !== "string" || object.edgeVersion.length)
+                    message.edgeVersion = $String(object.edgeVersion);
+            if (object.edgeMd5 != null)
+                if (typeof object.edgeMd5 !== "string" || object.edgeMd5.length)
+                    message.edgeMd5 = $String(object.edgeMd5);
             return message;
         };
 
@@ -854,6 +906,8 @@ export const n2n = $root.n2n = (() => {
                 object.p2pEndpoint = "";
                 object.natType = "";
                 object.pubSocket = "";
+                object.edgeVersion = "";
+                object.edgeMd5 = "";
             }
             if (message.edgeMacAddr != null && $Object.hasOwnProperty.call(message, "edgeMacAddr"))
                 object.edgeMacAddr = message.edgeMacAddr;
@@ -881,6 +935,10 @@ export const n2n = $root.n2n = (() => {
                 for (let j = 0; j < message.assistedSockets.length; ++j)
                     object.assistedSockets[j] = message.assistedSockets[j];
             }
+            if (message.edgeVersion != null && $Object.hasOwnProperty.call(message, "edgeVersion"))
+                object.edgeVersion = message.edgeVersion;
+            if (message.edgeMd5 != null && $Object.hasOwnProperty.call(message, "edgeMd5"))
+                object.edgeMd5 = message.edgeMd5;
             return object;
         };
 

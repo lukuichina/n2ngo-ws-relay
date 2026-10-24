@@ -158,6 +158,8 @@ export function decodeRegisterRequest(buf) {
   return {
     edgeMACAddr: data.edgeMacAddr,
     edgeDesc: data.edgeDesc || "",
+    edgeVersion: data.edgeVersion || "",
+    edgeMD5: data.edgeMD5 || "",
     communityName: data.communityName,
     encryptedMachineID: data.encryptedMachineId || new Uint8Array(0),
     p2pEndpoint: data.p2pEndpoint || "",
@@ -165,6 +167,8 @@ export function decodeRegisterRequest(buf) {
     natType: data.natType || "unknown",
     pubSocket: data.pubSocket || "",
     assistedSockets: data.assistedSockets || [],
+    edgeVersion: data.edgeVersion || "",
+    edgeMD5: data.edgeMD5 || "",
   };
 }
 

@@ -31,6 +31,8 @@ message RegisterRequest {
   // in a fixed order by the punching side (assisted first), not as an
   // unordered set.
   repeated string assisted_sockets = 10;
+  string edge_version = 11;
+  string edge_md5 = 12;
 }
 
 // 对应 Go 中的 RegisterResponse

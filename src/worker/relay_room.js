@@ -576,6 +576,7 @@ export class RelayRoom {
       <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="var nr=this.nextElementSibling; var disp=nr.style.display==='none'?'table-row':'none'; nr.style.display=disp; var ic=this.querySelector('.expand-icon'); if(ic){ic.textContent=disp==='table-row'?'▼':'▶';} setTimeout(saveExpandedState,0);">
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
         <td>${peer.desc || ''}</td>
+        <td>${peer.version || peer.md5 || '-'}</td>
         <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
         <td>${peer.arch || '-'}</td>
         <td>${formatIp(peer.virtualIP)}</td>
@@ -799,6 +800,7 @@ export class RelayRoom {
       <tr class="peer-main ${isOnline ? 'online' : 'offline'}" onclick="var nr=this.nextElementSibling; var disp=nr.style.display==='none'?'table-row':'none'; nr.style.display=disp; var ic=this.querySelector('.expand-icon'); if(ic){ic.textContent=disp==='table-row'?'▼':'▶';} setTimeout(saveExpandedState,0);">
         <td><span class="expand-icon">▶</span> ${peer.macAddr}</td>
         <td>${peer.desc || ''}</td>
+        <td>${peer.version || peer.md5 || '-'}</td>
         <td>${peer.os || (peer.platform ? peer.platform : '-')}</td>
         <td>${peer.arch || '-'}</td>
         <td>${formatIp(peer.virtualIP)}</td>
@@ -881,7 +883,7 @@ export class RelayRoom {
     </div>
     <table>
       <thead>
-        <tr><th>MAC Address</th><th>Hostname</th><th>OS</th><th>Arch</th><th>Virtual IP</th><th>Public Socket</th><th>P2P Endpoint</th><th>NAT Type</th><th>Status</th><th>Capabilities</th><th>Last Seen</th><th>Online Time</th></tr>
+        <tr><th>MAC Address</th><th>Hostname</th><th>Client Ver/MD5</th><th>OS</th><th>Arch</th><th>Virtual IP</th><th>Public Socket</th><th>P2P Endpoint</th><th>NAT Type</th><th>Status</th><th>Capabilities</th><th>Last Seen</th><th>Online Time</th></tr>
       </thead>
       <tbody>
         ${onlinePeers.map(p => row(p, true, allPeers)).join('')}
